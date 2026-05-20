@@ -134,7 +134,37 @@ async function generateContractDocx(payload) {
     }
   }
 
-  return writeZipWithSystemZip(entries);
+  return writeZipWithSystemZip(sanitizeContractEntries(entries));
+}
+
+function sanitizeContractEntries(entries) {
+  return entries
+    .filter((entry) => !entry.name.startsWith('customXml/'))
+    .map((entry) => {
+      if (entry.name === '[Content_Types].xml') {
+        return {
+          ...entry,
+          data: Buffer.from(stripCustomXmlContentTypes(entry.data.toString('utf8')), 'utf8'),
+        };
+      }
+
+      if (entry.name === 'word/_rels/document.xml.rels') {
+        return {
+          ...entry,
+          data: Buffer.from(stripCustomXmlRelationships(entry.data.toString('utf8')), 'utf8'),
+        };
+      }
+
+      return entry;
+    });
+}
+
+function stripCustomXmlContentTypes(xml) {
+  return xml.replace(/<Override\b(?=[^>]*\bPartName="\/customXml\/itemProps\d+\.xml")[^>]*\/>/g, '');
+}
+
+function stripCustomXmlRelationships(xml) {
+  return xml.replace(/<Relationship\b(?=[^>]*\bType="http:\/\/schemas\.openxmlformats\.org\/officeDocument\/2006\/relationships\/customXml")[^>]*\/>/g, '');
 }
 
 function contractValues(payload) {
@@ -174,7 +204,15 @@ function contractValues(payload) {
 }
 
 function transformContractXml(xml, values) {
-  return stripProofingMarkers(replaceTemplateParagraphs(xml, values));
+  return cleanIgnorablePrefixes(stripProofingMarkers(replaceTemplateParagraphs(xml, values)));
+}
+
+function cleanIgnorablePrefixes(xml) {
+  return xml.replace(/<[^!?][^>]*\bmc:Ignorable="([^"]+)"[^>]*>/, (tag, prefixes) => {
+    const declared = new Set([...tag.matchAll(/\bxmlns:([A-Za-z0-9_]+)=/g)].map((match) => match[1]));
+    const kept = prefixes.split(/\s+/).filter((prefix) => declared.has(prefix));
+    return tag.replace(/\bmc:Ignorable="[^"]*"/, kept.length ? `mc:Ignorable="${kept.join(' ')}"` : '');
+  });
 }
 
 function stripProofingMarkers(xml) {
