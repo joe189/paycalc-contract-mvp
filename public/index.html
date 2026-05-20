@@ -1,0 +1,1105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Joe's PayCalc</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 18px; max-width: 1100px; }
+    h1 { margin: 0 0 12px 0; font-size: 22px; }
+    h2 { margin: 18px 0 8px 0; font-size: 16px; }
+
+    .box { border: 1px solid #ddd; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 220px;
+      align-self: flex-start;
+    }
+
+    label { font-size: 12px; color: #333; }
+    input, select, textarea { padding: 8px; font-size: 14px; }
+    textarea { width: 100%; }
+
+    .small { font-size: 12px; color: #555; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .btn { padding: 10px 12px; cursor: pointer; border: 1px solid #ccc; background: #f7f7f7; border-radius: 8px; }
+    .btn:active { transform: translateY(1px); }
+    .warn { color: #8a2d0b; font-weight: 600; }
+    .ok { color: #0b6b2a; font-weight: 600; }
+
+    .tabs { display: inline-flex; border: 1px solid #ccc; border-radius: 10px; overflow: hidden; }
+    .tab { padding: 10px 14px; background: #f7f7f7; border: 0; cursor: pointer; }
+    .tab + .tab { border-left: 1px solid #ccc; }
+    .tab.active { background: #e9e9e9; font-weight: 700; }
+
+    /* Alignment fix: reserve consistent space under every field */
+    .hint {
+      min-height: 28px;        /* reserve space for 2 short lines */
+      line-height: 14px;
+      font-size: 12px;
+      color: #555;
+      margin-top: 0;
+    }
+
+    .hint.warn { color: #8a2d0b; font-weight: 600; }
+    .hint.ok { color: #0b6b2a; font-weight: 600; }
+
+    .spacer8 { height: 8px; }
+
+  </style>
+</head>
+<body>
+  <h1>Joe's PayCalc</h1>
+  <div class="small" style="margin-bottom:10px;">Built for speed, clarity, and profit control</div>
+
+  <h2>Assignment details</h2>
+  <div class="box">
+    <div class="row">
+      <div class="field">
+        <label>JobID</label>
+        <input id="jobId" type="text" placeholder="12345">
+        <div class="hint"><button class="btn" id="importJobDiva" type="button">Import from JobDiva</button></div>
+      </div>
+
+      <div class="field">
+        <label>Contractor Name</label>
+        <input id="contractorName" type="text" placeholder="Jane Doe">
+        <div class="hint"></div>
+      </div>
+
+      <div class="field">
+        <label>Job Title</label>
+        <input id="jobTitle" type="text" placeholder="CT Technologist">
+        <div class="hint"></div>
+      </div>
+
+      <div class="field">
+        <label>Facility</label>
+        <input id="facilityName" type="text" placeholder="Ohio State University Wexner Medical Center">
+        <div class="hint"></div>
+      </div>
+
+      <div class="field">
+        <label>State</label>
+        <select id="facilityState"></select>
+        <div class="hint"></div>
+      </div>
+
+      <div class="field">
+        <label>City</label>
+        <input id="facilityCity" type="text" placeholder="Columbus" list="destList">
+        <datalist id="destList"></datalist>
+        <div id="gsaPicked" class="hint warn">GSA uses City and State. Pick the autocomplete suggestion when possible.</div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div class="field">
+        <label>Start Date</label>
+        <input id="startDate" type="date">
+        <div class="hint"></div>
+      </div>
+
+      <div class="field">
+        <label>End Date</label>
+        <input id="endDate" type="date">
+        <div class="hint"></div>
+      </div>
+
+      <div class="field">
+        <label>Weeks</label>
+        <input id="durationWeeks" type="number" min="1" step="1" value="13">
+        <div class="hint"></div>
+      </div>
+
+      <div class="field">
+        <label>Schedule</label>
+        <select id="schedule">
+          <option value="3x12">3x12</option>
+          <option value="4x10" selected>4x10</option>
+          <option value="5x8">5x8</option>
+          <option value="4x12">4x12</option>
+        </select>
+        <div class="hint">Schedule sets Hours per Week automatically.</div>
+      </div>
+
+      <div class="field">
+        <label>Shift</label>
+        <select id="shift">
+          <option value="Days">Days</option>
+          <option value="Evenings">Evenings</option>
+          <option value="Nights">Nights</option>
+          <option value="Rotating">Rotating</option>
+          <option value="Variable">Variable</option>
+          <option value="Other">Other</option>
+        </select>
+        <div class="hint"></div>
+      </div>
+
+      <div class="field">
+        <label>Travel or Local</label>
+        <div class="tabs" role="tablist" aria-label="Pay type">
+          <button class="tab active" id="tabTravel" type="button" role="tab" aria-selected="true">Travel</button>
+          <button class="tab" id="tabLocal" type="button" role="tab" aria-selected="false">Local</button>
+        </div>
+        <input id="payType" type="hidden" value="TRAVEL">
+        <div class="hint" id="payTypeHint">Travel uses stipend. Local is 100 percent taxable.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Contract details</h2>
+  <div class="box">
+    <div class="row">
+      <div class="field">
+        <label>Contractor Address Line 1</label>
+        <input id="contractorAddress1" type="text" placeholder="123 Main St">
+        <div class="hint"></div>
+      </div>
+
+      <div class="field">
+        <label>Contractor Address Line 2</label>
+        <input id="contractorAddress2" type="text" placeholder="Columbus, OH 43215">
+        <div class="hint"></div>
+      </div>
+
+      <div class="field">
+        <label>Facility Street Address</label>
+        <input id="facilityAddress" type="text" placeholder="460 W 10th Ave">
+        <div class="hint"></div>
+      </div>
+
+      <div class="field">
+        <label>Facility ZIP</label>
+        <input id="facilityZip" type="text" placeholder="43210">
+        <div class="hint"></div>
+      </div>
+
+      <div class="field">
+        <label>Requested Time Off</label>
+        <input id="requestedTimeOff" type="text" placeholder="6/13-6/21, 7/9">
+        <div class="hint">Leave blank to remove the RTO row from the contract.</div>
+      </div>
+
+      <div class="field">
+        <label>Extension Bonus</label>
+        <input id="extensionBonus" type="number" min="0" step="0.01" value="0">
+        <div class="hint">0 or blank removes the bonus row from the contract.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Rates and live calculator</h2>
+  <div class="box grid">
+    <div class="box">
+      <div class="row">
+        <div class="field">
+          <label>Bill Rate (hourly)</label>
+          <input id="billRate" type="number" min="0" step="0.01" value="0">
+          <div class="hint"></div>
+        </div>
+
+        <div class="field">
+          <label>Hours per Week</label>
+          <input id="hoursPerWeek" type="number" min="0" step="1" value="40">
+          <div class="hint"></div>
+        </div>
+
+        <div class="field" id="otBillRateField" style="display:none;">
+          <label>OT Bill Rate (CA)</label>
+          <input id="otBillRate" type="number" min="0" step="0.01" value="0">
+          <div class="hint">Enter OT bill rate for CA. Default is base bill rate unless you change it.</div>
+        </div>
+
+        <div class="field">
+          <label>On Call Bill Rate (hourly)</label>
+          <input id="onCallBillRate" type="number" min="0" step="0.01" value="0">
+          <div class="hint"></div>
+        </div>
+
+        <div class="field">
+          <label>Bonus Deduction</label>
+          <input id="bonusDeduction" type="number" min="0" step="0.01" value="0">
+          <div class="hint">One time bonus deducted from total gross profit.</div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <div class="field" style="min-width:360px;">
+          <label>Margin per Hour (default 22)</label>
+          <input id="marginPerHour" type="number" min="0" step="1" value="22">
+          <input id="marginSlider" type="range" min="0" max="60" step="1" value="22">
+          <div class="hint"></div>
+        </div>
+
+        <div class="field" style="min-width:360px;">
+          <label>GSA one line</label>
+          <div id="gsaOneLine" class="hint"></div>
+          <div class="hint"></div>
+        </div>
+
+        <div class="field" style="min-width:360px;">
+          <label>Rounded weekly pay</label>
+          <label style="font-size:14px; color:#111; display:flex; align-items:center; gap:8px;">
+            <input id="roundToFive" type="checkbox">
+            Round Weekly Gross and Stipend to nearest number ending in 0 or 5
+          </label>
+          <div class="hint">When checked, rounded values are also used in profit and copy blocks.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="small">Outputs</div>
+      <div class="spacer8"></div>
+      <div class="small">Weekly Gross: <span id="outWeeklyGross" class="ok"></span></div>
+      <div class="small">Taxable Hourly: <span id="outTaxableHourly" class="ok"></span></div>
+      <div class="small">OT Hourly: <span id="outOtHourly" class="ok"></span></div>
+      <div class="small">Non Tax Weekly Stipend: <span id="outStipend" class="ok"></span></div>
+      <div class="small">On Call Pay Rate: <span id="outOnCallPay" class="ok"></span></div>
+      <div class="spacer8"></div>
+      <div class="small">Base Margin per Hour: <span id="outBaseMargin" class="ok"></span></div>
+      <div class="small">Margin per Hour After Bonus: <span id="outMargin" class="ok"></span></div>
+      <div class="small">Bonus Deduction: <span id="outBonusDeduction" class="warn"></span></div>
+      <div class="small">Weekly Gross Profit: <span id="outWeeklyGp" class="ok"></span></div>
+      <div class="small">Monthly Gross Profit: <span id="outMonthlyGp" class="ok"></span></div>
+      <div class="small">Total Gross Profit: <span id="outTotalGp" class="ok"></span></div>
+      <div class="small">Total Gross Profit After Bonus: <span id="outTotalGpAfterBonus" class="ok"></span></div>
+      <div id="stipendNote" class="hint warn" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <h2>Copy blocks</h2>
+  <div class="box grid">
+    <div class="box">
+      <div class="row" style="justify-content: space-between; align-items:center;">
+        <div><b>Approval Email block</b> <span class="small">(copy paste into Outlook)</span></div>
+        <div class="row">
+          <button class="btn" id="copyApproval" type="button">Copy</button>
+          <button class="btn" id="openApprovalEmail" type="button">Open Email</button>
+        </div>
+      </div>
+      <div class="row" style="margin:8px 0;">
+        <div class="field">
+          <label>Approver Email</label>
+          <input id="approverEmail" type="email" placeholder="approver@company.com">
+          <div class="hint"></div>
+        </div>
+        <div class="field">
+          <label>Email Subject</label>
+          <input id="approvalSubject" type="text" value="Contract approval request">
+          <div class="hint"></div>
+        </div>
+      </div>
+      <textarea id="approvalBlock" class="mono" rows="24"></textarea>
+      <div id="emailStatus" class="small" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="box">
+      <div class="row" style="justify-content: space-between; align-items:center;">
+        <div><b>Contract Insert block</b> <span class="small">(paste into Word)</span></div>
+        <div class="row">
+          <button class="btn" id="copyContract" type="button">Copy</button>
+          <button class="btn" id="downloadWordContract" type="button">Download Word Contract</button>
+        </div>
+      </div>
+      <textarea id="contractBlock" class="mono" rows="22"></textarea>
+      <div id="contractStatus" class="small" style="margin-top:8px;"></div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC"];
+  const el = (id) => document.getElementById(id);
+
+  const facilityState = el("facilityState");
+  STATES.forEach(s => {
+    const o = document.createElement("option");
+    o.value = s; o.textContent = s;
+    facilityState.appendChild(o);
+  });
+  facilityState.value = "OH";
+
+  const destList = el("destList");
+  const gsaPicked = el("gsaPicked");
+  const CONUS = { lodging: 110, mie: 68 };
+
+  // Embedded FY2026 GSA Master (converted from CSV to JSON so the file works offline)
+  const EMBEDDED_GSA_ROWS = [{"state":"AL","dest":"Birmingham","seasonBegin":"","seasonEnd":"","lodging":126.0,"mie":80.0},{"state":"AL","dest":"Gulf Shores","seasonBegin":"October 1","seasonEnd":"February 28","lodging":134.0,"mie":74.0},{"state":"AL","dest":"Gulf Shores","seasonBegin":"March 1","seasonEnd":"May 31","lodging":163.0,"mie":74.0},{"state":"AL","dest":"Gulf Shores","seasonBegin":"June 1","seasonEnd":"July 31","lodging":216.0,"mie":74.0},{"state":"AL","dest":"Gulf Shores","seasonBegin":"August 1","seasonEnd":"September 30","lodging":134.0,"mie":74.0},{"state":"AL","dest":"Huntsville","seasonBegin":"October 1","seasonEnd":"March 31","lodging":141.0,"mie":74.0},{"state":"AL","dest":"Huntsville","seasonBegin":"April 1","seasonEnd":"July 31","lodging":134.0,"mie":74.0},{"state":"AL","dest":"Huntsville","seasonBegin":"August 1","seasonEnd":"September 30","lodging":141.0,"mie":74.0},{"state":"AL","dest":"Mobile","seasonBegin":"","seasonEnd":"","lodging":114.0,"mie":74.0},{"state":"AR","dest":"Hot Springs","seasonBegin":"","seasonEnd":"","lodging":114.0,"mie":68.0},{"state":"AZ","dest":"Grand Canyon / Flagstaff","seasonBegin":"October 1","seasonEnd":"October 31","lodging":144.0,"mie":80.0},{"state":"AZ","dest":"Grand Canyon / Flagstaff","seasonBegin":"November 1","seasonEnd":"February 28","lodging":110.0,"mie":80.0},{"state":"AZ","dest":"Grand Canyon / Flagstaff","seasonBegin":"March 1","seasonEnd":"September 30","lodging":144.0,"mie":80.0},{"state":"AZ","dest":"Kayenta","seasonBegin":"","seasonEnd":"","lodging":145.0,"mie":74.0},{"state":"AZ","dest":"Phoenix / Scottsdale","seasonBegin":"October 1","seasonEnd":"January 31","lodging":160.0,"mie":86.0},{"state":"AZ","dest":"Phoenix / Scottsdale","seasonBegin":"February 1","seasonEnd":"March 31","lodging":229.0,"mie":86.0},{"state":"AZ","dest":"Phoenix / Scottsdale","seasonBegin":"April 1","seasonEnd":"May 31","lodging":161.0,"mie":86.0},{"state":"AZ","dest":"Phoenix / Scottsdale","seasonBegin":"June 1","seasonEnd":"August 31","lodging":113.0,"mie":86.0},{"state":"AZ","dest":"Phoenix / Scottsdale","seasonBegin":"September 1","seasonEnd":"September 30","lodging":160.0,"mie":86.0},{"state":"AZ","dest":"Sedona","seasonBegin":"October 1","seasonEnd":"December 31","lodging":213.0,"mie":92.0},{"state":"AZ","dest":"Sedona","seasonBegin":"January 1","seasonEnd":"February 28","lodging":164.0,"mie":92.0},{"state":"AZ","dest":"Sedona","seasonBegin":"March 1","seasonEnd":"April 30","lodging":274.0,"mie":92.0},{"state":"AZ","dest":"Sedona","seasonBegin":"May 1","seasonEnd":"August 31","lodging":183.0,"mie":92.0},{"state":"AZ","dest":"Sedona","seasonBegin":"September 1","seasonEnd":"September 30","lodging":213.0,"mie":92.0},{"state":"AZ","dest":"Tucson","seasonBegin":"October 1","seasonEnd":"December 31","lodging":123.0,"mie":80.0},{"state":"AZ","dest":"Tucson","seasonBegin":"January 1","seasonEnd":"March 31","lodging":171.0,"mie":80.0},{"state":"AZ","dest":"Tucson","seasonBegin":"April 1","seasonEnd":"September 30","lodging":123.0,"mie":80.0},{"state":"CA","dest":"Antioch / Brentwood / Concord","seasonBegin":"","seasonEnd":"","lodging":147.0,"mie":86.0},{"state":"CA","dest":"Bakersfield / Ridgecrest","seasonBegin":"","seasonEnd":"","lodging":132.0,"mie":74.0},{"state":"CA","dest":"Barstow / Ontario / Victorville","seasonBegin":"","seasonEnd":"","lodging":124.0,"mie":86.0},{"state":"CA","dest":"Death Valley","seasonBegin":"","seasonEnd":"","lodging":142.0,"mie":80.0},{"state":"CA","dest":"Eureka / Arcata / McKinleyville","seasonBegin":"October 1","seasonEnd":"May 31","lodging":125.0,"mie":86.0},{"state":"CA","dest":"Eureka / Arcata / McKinleyville","seasonBegin":"June 1","seasonEnd":"August 31","lodging":172.0,"mie":86.0},{"state":"CA","dest":"Eureka / Arcata / McKinleyville","seasonBegin":"September 1","seasonEnd":"September 30","lodging":125.0,"mie":86.0},{"state":"CA","dest":"Fresno","seasonBegin":"","seasonEnd":"","lodging":129.0,"mie":86.0},{"state":"CA","dest":"Los Angeles","seasonBegin":"","seasonEnd":"","lodging":191.0,"mie":86.0},{"state":"CA","dest":"Mammoth Lakes","seasonBegin":"October 1","seasonEnd":"November 30","lodging":139.0,"mie":86.0},{"state":"CA","dest":"Mammoth Lakes","seasonBegin":"December 1","seasonEnd":"March 31","lodging":195.0,"mie":86.0},{"state":"CA","dest":"Mammoth Lakes","seasonBegin":"April 1","seasonEnd":"September 30","lodging":139.0,"mie":86.0},{"state":"CA","dest":"Mill Valley / San Rafael / Novato","seasonBegin":"October 1","seasonEnd":"May 31","lodging":153.0,"mie":92.0},{"state":"CA","dest":"Mill Valley / San Rafael / Novato","seasonBegin":"June 1","seasonEnd":"September 30","lodging":175.0,"mie":92.0},{"state":"CA","dest":"Monterey","seasonBegin":"October 1","seasonEnd":"January 31","lodging":191.0,"mie":92.0},{"state":"CA","dest":"Monterey","seasonBegin":"February 1","seasonEnd":"June 30","lodging":199.0,"mie":92.0},{"state":"CA","dest":"Monterey","seasonBegin":"July 1","seasonEnd":"August 31","lodging":279.0,"mie":92.0},{"state":"CA","dest":"Monterey","seasonBegin":"September 1","seasonEnd":"September 30","lodging":191.0,"mie":92.0},{"state":"CA","dest":"Napa","seasonBegin":"October 1","seasonEnd":"November 30","lodging":246.0,"mie":92.0},{"state":"CA","dest":"Napa","seasonBegin":"December 1","seasonEnd":"January 31","lodging":172.0,"mie":92.0},{"state":"CA","dest":"Napa","seasonBegin":"February 1","seasonEnd":"September 30","lodging":246.0,"mie":92.0},{"state":"CA","dest":"Oakhurst","seasonBegin":"","seasonEnd":"","lodging":135.0,"mie":80.0},{"state":"CA","dest":"Oakland","seasonBegin":"","seasonEnd":"","lodging":145.0,"mie":92.0},{"state":"CA","dest":"Palm Springs","seasonBegin":"October 1","seasonEnd":"April 30","lodging":186.0,"mie":86.0},{"state":"CA","dest":"Palm Springs","seasonBegin":"May 1","seasonEnd":"September 30","lodging":141.0,"mie":86.0},{"state":"CA","dest":"Point Arena / Gualala","seasonBegin":"","seasonEnd":"","lodging":129.0,"mie":86.0},{"state":"CA","dest":"Sacramento","seasonBegin":"","seasonEnd":"","lodging":150.0,"mie":86.0},{"state":"CA","dest":"San Diego","seasonBegin":"October 1","seasonEnd":"May 31","lodging":199.0,"mie":86.0},{"state":"CA","dest":"San Diego","seasonBegin":"June 1","seasonEnd":"July 31","lodging":237.0,"mie":86.0},{"state":"CA","dest":"San Diego","seasonBegin":"August 1","seasonEnd":"September 30","lodging":199.0,"mie":86.0},{"state":"CA","dest":"San Francisco","seasonBegin":"October 1","seasonEnd":"December 31","lodging":272.0,"mie":92.0},{"state":"CA","dest":"San Francisco","seasonBegin":"January 1","seasonEnd":"August 31","lodging":259.0,"mie":92.0},{"state":"CA","dest":"San Francisco","seasonBegin":"September 1","seasonEnd":"September 30","lodging":272.0,"mie":92.0},{"state":"CA","dest":"San Luis Obispo","seasonBegin":"October 1","seasonEnd":"May 31","lodging":163.0,"mie":86.0},{"state":"CA","dest":"San Luis Obispo","seasonBegin":"June 1","seasonEnd":"July 31","lodging":203.0,"mie":86.0},{"state":"CA","dest":"San Luis Obispo","seasonBegin":"August 1","seasonEnd":"September 30","lodging":163.0,"mie":86.0},{"state":"CA","dest":"San Mateo / Foster City / Belmont","seasonBegin":"","seasonEnd":"","lodging":183.0,"mie":86.0},{"state":"CA","dest":"Santa Barbara","seasonBegin":"October 1","seasonEnd":"June 30","lodging":205.0,"mie":92.0},{"state":"CA","dest":"Santa Barbara","seasonBegin":"July 1","seasonEnd":"August 31","lodging":262.0,"mie":92.0},{"state":"CA","dest":"Santa Barbara","seasonBegin":"September 1","seasonEnd":"September 30","lodging":205.0,"mie":92.0},{"state":"CA","dest":"Santa Cruz","seasonBegin":"October 1","seasonEnd":"May 31","lodging":139.0,"mie":86.0},{"state":"CA","dest":"Santa Cruz","seasonBegin":"June 1","seasonEnd":"August 31","lodging":176.0,"mie":86.0},{"state":"CA","dest":"Santa Cruz","seasonBegin":"September 1","seasonEnd":"September 30","lodging":139.0,"mie":86.0},{"state":"CA","dest":"Santa Monica","seasonBegin":"","seasonEnd":"","lodging":273.0,"mie":92.0},{"state":"CA","dest":"Santa Rosa","seasonBegin":"","seasonEnd":"","lodging":157.0,"mie":86.0},{"state":"CA","dest":"South Lake Tahoe","seasonBegin":"October 1","seasonEnd":"November 30","lodging":141.0,"mie":86.0},{"state":"CA","dest":"South Lake Tahoe","seasonBegin":"December 1","seasonEnd":"March 31","lodging":247.0,"mie":86.0},{"state":"CA","dest":"South Lake Tahoe","seasonBegin":"April 1","seasonEnd":"May 31","lodging":143.0,"mie":86.0},{"state":"CA","dest":"South Lake Tahoe","seasonBegin":"June 1","seasonEnd":"August 31","lodging":171.0,"mie":86.0},{"state":"CA","dest":"South Lake Tahoe","seasonBegin":"September 1","seasonEnd":"September 30","lodging":141.0,"mie":86.0},{"state":"CA","dest":"Stockton","seasonBegin":"","seasonEnd":"","lodging":132.0,"mie":74.0},{"state":"CA","dest":"Sunnyvale / Palo Alto / San Jose","seasonBegin":"","seasonEnd":"","lodging":192.0,"mie":92.0},{"state":"CA","dest":"Tahoe City","seasonBegin":"","seasonEnd":"","lodging":131.0,"mie":86.0},{"state":"CA","dest":"Truckee","seasonBegin":"October 1","seasonEnd":"November 30","lodging":142.0,"mie":86.0},{"state":"CA","dest":"Truckee","seasonBegin":"December 1","seasonEnd":"February 28","lodging":169.0,"mie":86.0},{"state":"CA","dest":"Truckee","seasonBegin":"March 1","seasonEnd":"May 31","lodging":146.0,"mie":86.0},{"state":"CA","dest":"Truckee","seasonBegin":"June 1","seasonEnd":"August 31","lodging":173.0,"mie":86.0},{"state":"CA","dest":"Truckee","seasonBegin":"September 1","seasonEnd":"September 30","lodging":142.0,"mie":86.0},{"state":"CA","dest":"Visalia","seasonBegin":"","seasonEnd":"","lodging":131.0,"mie":80.0},{"state":"CA","dest":"West Sacramento / Davis","seasonBegin":"","seasonEnd":"","lodging":142.0,"mie":80.0},{"state":"CA","dest":"Yosemite National Park","seasonBegin":"October 1","seasonEnd":"December 31","lodging":181.0,"mie":86.0},{"state":"CA","dest":"Yosemite National Park","seasonBegin":"January 1","seasonEnd":"April 30","lodging":203.0,"mie":86.0},{"state":"CA","dest":"Yosemite National Park","seasonBegin":"May 1","seasonEnd":"September 30","lodging":181.0,"mie":86.0},{"state":"CO","dest":"Aspen","seasonBegin":"October 1","seasonEnd":"November 30","lodging":207.0,"mie":92.0},{"state":"CO","dest":"Aspen","seasonBegin":"December 1","seasonEnd":"March 31","lodging":407.0,"mie":92.0},{"state":"CO","dest":"Aspen","seasonBegin":"April 1","seasonEnd":"September 30","lodging":207.0,"mie":92.0},{"state":"CO","dest":"Boulder / Broomfield","seasonBegin":"October 1","seasonEnd":"October 31","lodging":173.0,"mie":80.0},{"state":"CO","dest":"Boulder / Broomfield","seasonBegin":"November 1","seasonEnd":"April 30","lodging":125.0,"mie":80.0},{"state":"CO","dest":"Boulder / Broomfield","seasonBegin":"May 1","seasonEnd":"September 30","lodging":173.0,"mie":80.0},{"state":"CO","dest":"Colorado Springs","seasonBegin":"October 1","seasonEnd":"May 31","lodging":123.0,"mie":86.0},{"state":"CO","dest":"Colorado Springs","seasonBegin":"June 1","seasonEnd":"August 31","lodging":168.0,"mie":86.0},{"state":"CO","dest":"Colorado Springs","seasonBegin":"September 1","seasonEnd":"September 30","lodging":123.0,"mie":86.0},{"state":"CO","dest":"Cortez","seasonBegin":"October 1","seasonEnd":"October 31","lodging":133.0,"mie":74.0},{"state":"CO","dest":"Cortez","seasonBegin":"November 1","seasonEnd":"April 30","lodging":110.0,"mie":74.0},{"state":"CO","dest":"Cortez","seasonBegin":"May 1","seasonEnd":"September 30","lodging":133.0,"mie":74.0},{"state":"CO","dest":"Crested Butte / Gunnison","seasonBegin":"","seasonEnd":"","lodging":154.0,"mie":86.0},{"state":"CO","dest":"Denver / Aurora","seasonBegin":"October 1","seasonEnd":"October 31","lodging":215.0,"mie":92.0},{"state":"CO","dest":"Denver / Aurora","seasonBegin":"November 1","seasonEnd":"March 31","lodging":165.0,"mie":92.0},{"state":"CO","dest":"Denver / Aurora","seasonBegin":"April 1","seasonEnd":"September 30","lodging":215.0,"mie":92.0},{"state":"CO","dest":"Douglas","seasonBegin":"October 1","seasonEnd":"May 31","lodging":111.0,"mie":80.0},{"state":"CO","dest":"Douglas","seasonBegin":"June 1","seasonEnd":"August 31","lodging":142.0,"mie":80.0},{"state":"CO","dest":"Douglas","seasonBegin":"September 1","seasonEnd":"September 30","lodging":111.0,"mie":80.0},{"state":"CO","dest":"Durango","seasonBegin":"October 1","seasonEnd":"May 31","lodging":121.0,"mie":80.0},{"state":"CO","dest":"Durango","seasonBegin":"June 1","seasonEnd":"September 30","lodging":184.0,"mie":80.0},{"state":"CO","dest":"Fort Collins / Loveland","seasonBegin":"October 1","seasonEnd":"May 31","lodging":110.0,"mie":80.0},{"state":"CO","dest":"Fort Collins / Loveland","seasonBegin":"June 1","seasonEnd":"August 31","lodging":140.0,"mie":80.0},{"state":"CO","dest":"Fort Collins / Loveland","seasonBegin":"September 1","seasonEnd":"September 30","lodging":110.0,"mie":80.0},{"state":"CO","dest":"Grand Lake","seasonBegin":"October 1","seasonEnd":"November 30","lodging":145.0,"mie":86.0},{"state":"CO","dest":"Grand Lake","seasonBegin":"December 1","seasonEnd":"March 31","lodging":173.0,"mie":86.0},{"state":"CO","dest":"Grand Lake","seasonBegin":"April 1","seasonEnd":"May 31","lodging":122.0,"mie":86.0},{"state":"CO","dest":"Grand Lake","seasonBegin":"June 1","seasonEnd":"September 30","lodging":145.0,"mie":86.0},{"state":"CO","dest":"Montrose","seasonBegin":"October 1","seasonEnd":"October 31","lodging":185.0,"mie":74.0},{"state":"CO","dest":"Montrose","seasonBegin":"November 1","seasonEnd":"May 31","lodging":136.0,"mie":74.0},{"state":"CO","dest":"Montrose","seasonBegin":"June 1","seasonEnd":"September 30","lodging":185.0,"mie":74.0},{"state":"CO","dest":"Silverthorne / Breckenridge","seasonBegin":"October 1","seasonEnd":"November 30","lodging":162.0,"mie":92.0},{"state":"CO","dest":"Silverthorne / Breckenridge","seasonBegin":"December 1","seasonEnd":"March 31","lodging":282.0,"mie":92.0},{"state":"CO","dest":"Silverthorne / Breckenridge","seasonBegin":"April 1","seasonEnd":"September 30","lodging":162.0,"mie":92.0},{"state":"CO","dest":"Steamboat Springs","seasonBegin":"October 1","seasonEnd":"November 30","lodging":132.0,"mie":92.0},{"state":"CO","dest":"Steamboat Springs","seasonBegin":"December 1","seasonEnd":"March 31","lodging":288.0,"mie":92.0},{"state":"CO","dest":"Steamboat Springs","seasonBegin":"April 1","seasonEnd":"May 31","lodging":123.0,"mie":92.0},{"state":"CO","dest":"Steamboat Springs","seasonBegin":"June 1","seasonEnd":"September 30","lodging":179.0,"mie":92.0},{"state":"CO","dest":"Telluride","seasonBegin":"October 1","seasonEnd":"November 30","lodging":184.0,"mie":92.0},{"state":"CO","dest":"Telluride","seasonBegin":"December 1","seasonEnd":"March 31","lodging":350.0,"mie":92.0},{"state":"CO","dest":"Telluride","seasonBegin":"April 1","seasonEnd":"September 30","lodging":184.0,"mie":92.0},{"state":"CO","dest":"Vail","seasonBegin":"October 1","seasonEnd":"November 30","lodging":201.0,"mie":92.0},{"state":"CO","dest":"Vail","seasonBegin":"December 1","seasonEnd":"March 31","lodging":397.0,"mie":92.0},{"state":"CO","dest":"Vail","seasonBegin":"April 1","seasonEnd":"September 30","lodging":201.0,"mie":92.0},{"state":"CT","dest":"Bridgeport / Danbury","seasonBegin":"","seasonEnd":"","lodging":146.0,"mie":86.0},{"state":"CT","dest":"Hartford","seasonBegin":"","seasonEnd":"","lodging":138.0,"mie":80.0},{"state":"CT","dest":"New Haven","seasonBegin":"","seasonEnd":"","lodging":130.0,"mie":80.0},{"state":"CT","dest":"New London / Groton","seasonBegin":"","seasonEnd":"","lodging":124.0,"mie":86.0},{"state":"DC","dest":"District of Columbia","seasonBegin":"October 1","seasonEnd":"October 31","lodging":275.0,"mie":92.0},{"state":"DC","dest":"District of Columbia","seasonBegin":"November 1","seasonEnd":"February 28","lodging":196.0,"mie":92.0},{"state":"DC","dest":"District of Columbia","seasonBegin":"March 1","seasonEnd":"June 30","lodging":276.0,"mie":92.0},{"state":"DC","dest":"District of Columbia","seasonBegin":"July 1","seasonEnd":"August 31","lodging":183.0,"mie":92.0},{"state":"DC","dest":"District of Columbia","seasonBegin":"September 1","seasonEnd":"September 30","lodging":275.0,"mie":92.0},{"state":"DE","dest":"Lewes","seasonBegin":"October 1","seasonEnd":"May 31","lodging":124.0,"mie":74.0},{"state":"DE","dest":"Lewes","seasonBegin":"June 1","seasonEnd":"August 31","lodging":221.0,"mie":74.0},{"state":"DE","dest":"Lewes","seasonBegin":"September 1","seasonEnd":"September 30","lodging":124.0,"mie":74.0},{"state":"DE","dest":"Wilmington","seasonBegin":"","seasonEnd":"","lodging":127.0,"mie":74.0},{"state":"FL","dest":"Boca Raton / Delray Beach / Jupiter","seasonBegin":"October 1","seasonEnd":"December 31","lodging":171.0,"mie":86.0},{"state":"FL","dest":"Boca Raton / Delray Beach / Jupiter","seasonBegin":"January 1","seasonEnd":"April 30","lodging":244.0,"mie":86.0},{"state":"FL","dest":"Boca Raton / Delray Beach / Jupiter","seasonBegin":"May 1","seasonEnd":"September 30","lodging":143.0,"mie":86.0},{"state":"FL","dest":"Bradenton","seasonBegin":"October 1","seasonEnd":"January 31","lodging":151.0,"mie":80.0},{"state":"FL","dest":"Bradenton","seasonBegin":"February 1","seasonEnd":"March 31","lodging":225.0,"mie":80.0},{"state":"FL","dest":"Bradenton","seasonBegin":"April 1","seasonEnd":"September 30","lodging":145.0,"mie":80.0},{"state":"FL","dest":"Cocoa Beach","seasonBegin":"October 1","seasonEnd":"January 31","lodging":166.0,"mie":74.0},{"state":"FL","dest":"Cocoa Beach","seasonBegin":"February 1","seasonEnd":"March 31","lodging":208.0,"mie":74.0},{"state":"FL","dest":"Cocoa Beach","seasonBegin":"April 1","seasonEnd":"September 30","lodging":166.0,"mie":74.0},{"state":"FL","dest":"Daytona Beach","seasonBegin":"October 1","seasonEnd":"December 31","lodging":116.0,"mie":80.0},{"state":"FL","dest":"Daytona Beach","seasonBegin":"January 1","seasonEnd":"April 30","lodging":157.0,"mie":80.0},{"state":"FL","dest":"Daytona Beach","seasonBegin":"May 1","seasonEnd":"July 31","lodging":138.0,"mie":80.0},{"state":"FL","dest":"Daytona Beach","seasonBegin":"August 1","seasonEnd":"September 30","lodging":116.0,"mie":80.0},{"state":"FL","dest":"Fort Lauderdale","seasonBegin":"October 1","seasonEnd":"December 31","lodging":172.0,"mie":86.0},{"state":"FL","dest":"Fort Lauderdale","seasonBegin":"January 1","seasonEnd":"April 30","lodging":224.0,"mie":86.0},{"state":"FL","dest":"Fort Lauderdale","seasonBegin":"May 1","seasonEnd":"September 30","lodging":143.0,"mie":86.0},{"state":"FL","dest":"Fort Myers","seasonBegin":"October 1","seasonEnd":"December 31","lodging":139.0,"mie":80.0},{"state":"FL","dest":"Fort Myers","seasonBegin":"January 1","seasonEnd":"March 31","lodging":216.0,"mie":80.0},{"state":"FL","dest":"Fort Myers","seasonBegin":"April 1","seasonEnd":"September 30","lodging":139.0,"mie":80.0},{"state":"FL","dest":"Fort Walton Beach / De Funiak Springs","seasonBegin":"October 1","seasonEnd":"October 31","lodging":164.0,"mie":86.0},{"state":"FL","dest":"Fort Walton Beach / De Funiak Springs","seasonBegin":"November 1","seasonEnd":"February 28","lodging":110.0,"mie":86.0},{"state":"FL","dest":"Fort Walton Beach / De Funiak Springs","seasonBegin":"March 1","seasonEnd":"May 31","lodging":184.0,"mie":86.0},{"state":"FL","dest":"Fort Walton Beach / De Funiak Springs","seasonBegin":"June 1","seasonEnd":"July 31","lodging":260.0,"mie":86.0},{"state":"FL","dest":"Fort Walton Beach / De Funiak Springs","seasonBegin":"August 1","seasonEnd":"September 30","lodging":164.0,"mie":86.0},{"state":"FL","dest":"Gulf Breeze","seasonBegin":"October 1","seasonEnd":"February 28","lodging":124.0,"mie":74.0},{"state":"FL","dest":"Gulf Breeze","seasonBegin":"March 1","seasonEnd":"May 31","lodging":161.0,"mie":74.0},{"state":"FL","dest":"Gulf Breeze","seasonBegin":"June 1","seasonEnd":"July 31","lodging":214.0,"mie":74.0},{"state":"FL","dest":"Gulf Breeze","seasonBegin":"August 1","seasonEnd":"September 30","lodging":124.0,"mie":74.0},{"state":"FL","dest":"Key West","seasonBegin":"October 1","seasonEnd":"November 30","lodging":269.0,"mie":86.0},{"state":"FL","dest":"Key West","seasonBegin":"December 1","seasonEnd":"January 31","lodging":366.0,"mie":86.0},{"state":"FL","dest":"Key West","seasonBegin":"February 1","seasonEnd":"April 30","lodging":436.0,"mie":86.0},{"state":"FL","dest":"Key West","seasonBegin":"May 1","seasonEnd":"September 30","lodging":258.0,"mie":86.0},{"state":"FL","dest":"Miami","seasonBegin":"October 1","seasonEnd":"November 30","lodging":145.0,"mie":92.0},{"state":"FL","dest":"Miami","seasonBegin":"December 1","seasonEnd":"January 31","lodging":210.0,"mie":92.0},{"state":"FL","dest":"Miami","seasonBegin":"February 1","seasonEnd":"March 31","lodging":232.0,"mie":92.0},{"state":"FL","dest":"Miami","seasonBegin":"April 1","seasonEnd":"May 31","lodging":182.0,"mie":92.0},{"state":"FL","dest":"Miami","seasonBegin":"June 1","seasonEnd":"September 30","lodging":145.0,"mie":92.0},{"state":"FL","dest":"Naples","seasonBegin":"October 1","seasonEnd":"November 30","lodging":164.0,"mie":80.0},{"state":"FL","dest":"Naples","seasonBegin":"December 1","seasonEnd":"January 31","lodging":257.0,"mie":80.0},{"state":"FL","dest":"Naples","seasonBegin":"February 1","seasonEnd":"April 30","lodging":314.0,"mie":80.0},{"state":"FL","dest":"Naples","seasonBegin":"May 1","seasonEnd":"September 30","lodging":164.0,"mie":80.0},{"state":"FL","dest":"Orlando","seasonBegin":"October 1","seasonEnd":"December 31","lodging":140.0,"mie":80.0},{"state":"FL","dest":"Orlando","seasonBegin":"January 1","seasonEnd":"March 31","lodging":169.0,"mie":80.0},{"state":"FL","dest":"Orlando","seasonBegin":"April 1","seasonEnd":"September 30","lodging":140.0,"mie":80.0},{"state":"FL","dest":"Panama City","seasonBegin":"October 1","seasonEnd":"February 28","lodging":110.0,"mie":80.0},{"state":"FL","dest":"Panama City","seasonBegin":"March 1","seasonEnd":"May 31","lodging":147.0,"mie":80.0},{"state":"FL","dest":"Panama City","seasonBegin":"June 1","seasonEnd":"July 31","lodging":194.0,"mie":80.0},{"state":"FL","dest":"Panama City","seasonBegin":"August 1","seasonEnd":"September 30","lodging":110.0,"mie":80.0},{"state":"FL","dest":"Pensacola","seasonBegin":"October 1","seasonEnd":"February 28","lodging":120.0,"mie":74.0},{"state":"FL","dest":"Pensacola","seasonBegin":"March 1","seasonEnd":"May 31","lodging":149.0,"mie":74.0},{"state":"FL","dest":"Pensacola","seasonBegin":"June 1","seasonEnd":"July 31","lodging":190.0,"mie":74.0},{"state":"FL","dest":"Pensacola","seasonBegin":"August 1","seasonEnd":"September 30","lodging":120.0,"mie":74.0},{"state":"FL","dest":"Punta Gorda","seasonBegin":"October 1","seasonEnd":"January 31","lodging":124.0,"mie":74.0},{"state":"FL","dest":"Punta Gorda","seasonBegin":"February 1","seasonEnd":"March 31","lodging":192.0,"mie":74.0},{"state":"FL","dest":"Punta Gorda","seasonBegin":"April 1","seasonEnd":"September 30","lodging":124.0,"mie":74.0},{"state":"FL","dest":"Sarasota","seasonBegin":"October 1","seasonEnd":"January 31","lodging":145.0,"mie":86.0},{"state":"FL","dest":"Sarasota","seasonBegin":"February 1","seasonEnd":"April 30","lodging":205.0,"mie":86.0},{"state":"FL","dest":"Sarasota","seasonBegin":"May 1","seasonEnd":"September 30","lodging":131.0,"mie":86.0},{"state":"FL","dest":"Sebring","seasonBegin":"October 1","seasonEnd":"January 31","lodging":126.0,"mie":74.0},{"state":"FL","dest":"Sebring","seasonBegin":"February 1","seasonEnd":"March 31","lodging":219.0,"mie":74.0},{"state":"FL","dest":"Sebring","seasonBegin":"April 1","seasonEnd":"September 30","lodging":126.0,"mie":74.0},{"state":"FL","dest":"St. Augustine","seasonBegin":"October 1","seasonEnd":"November 30","lodging":151.0,"mie":80.0},{"state":"FL","dest":"St. Augustine","seasonBegin":"December 1","seasonEnd":"March 31","lodging":170.0,"mie":80.0},{"state":"FL","dest":"St. Augustine","seasonBegin":"April 1","seasonEnd":"September 30","lodging":151.0,"mie":80.0},{"state":"FL","dest":"Stuart","seasonBegin":"October 1","seasonEnd":"January 31","lodging":129.0,"mie":80.0},{"state":"FL","dest":"Stuart","seasonBegin":"February 1","seasonEnd":"March 31","lodging":214.0,"mie":80.0},{"state":"FL","dest":"Stuart","seasonBegin":"April 1","seasonEnd":"September 30","lodging":129.0,"mie":80.0},{"state":"FL","dest":"Tallahassee","seasonBegin":"October 1","seasonEnd":"December 31","lodging":113.0,"mie":80.0},{"state":"FL","dest":"Tallahassee","seasonBegin":"January 1","seasonEnd":"April 30","lodging":138.0,"mie":80.0},{"state":"FL","dest":"Tallahassee","seasonBegin":"May 1","seasonEnd":"September 30","lodging":113.0,"mie":80.0},{"state":"FL","dest":"Tampa / St. Petersburg","seasonBegin":"October 1","seasonEnd":"January 31","lodging":148.0,"mie":80.0},{"state":"FL","dest":"Tampa / St. Petersburg","seasonBegin":"February 1","seasonEnd":"April 30","lodging":200.0,"mie":80.0},{"state":"FL","dest":"Tampa / St. Petersburg","seasonBegin":"May 1","seasonEnd":"September 30","lodging":148.0,"mie":80.0},{"state":"FL","dest":"Vero Beach","seasonBegin":"October 1","seasonEnd":"November 30","lodging":181.0,"mie":74.0},{"state":"FL","dest":"Vero Beach","seasonBegin":"December 1","seasonEnd":"April 30","lodging":259.0,"mie":74.0},{"state":"FL","dest":"Vero Beach","seasonBegin":"May 1","seasonEnd":"September 30","lodging":181.0,"mie":74.0},{"state":"GA","dest":"Athens","seasonBegin":"","seasonEnd":"","lodging":136.0,"mie":74.0},{"state":"GA","dest":"Atlanta","seasonBegin":"October 1","seasonEnd":"December 31","lodging":182.0,"mie":86.0},{"state":"GA","dest":"Atlanta","seasonBegin":"January 1","seasonEnd":"March 31","lodging":197.0,"mie":86.0},{"state":"GA","dest":"Atlanta","seasonBegin":"April 1","seasonEnd":"September 30","lodging":182.0,"mie":86.0},{"state":"GA","dest":"Augusta","seasonBegin":"October 1","seasonEnd":"April 30","lodging":125.0,"mie":74.0},{"state":"GA","dest":"Augusta","seasonBegin":"May 1","seasonEnd":"June 30","lodging":110.0,"mie":74.0},{"state":"GA","dest":"Augusta","seasonBegin":"July 1","seasonEnd":"September 30","lodging":125.0,"mie":74.0},{"state":"GA","dest":"Jekyll Island / Brunswick","seasonBegin":"October 1","seasonEnd":"February 28","lodging":172.0,"mie":86.0},{"state":"GA","dest":"Jekyll Island / Brunswick","seasonBegin":"March 1","seasonEnd":"July 31","lodging":223.0,"mie":86.0},{"state":"GA","dest":"Jekyll Island / Brunswick","seasonBegin":"August 1","seasonEnd":"September 30","lodging":172.0,"mie":86.0},{"state":"GA","dest":"Marietta","seasonBegin":"","seasonEnd":"","lodging":126.0,"mie":74.0},{"state":"GA","dest":"Savannah","seasonBegin":"October 1","seasonEnd":"February 28","lodging":147.0,"mie":80.0},{"state":"GA","dest":"Savannah","seasonBegin":"March 1","seasonEnd":"April 30","lodging":176.0,"mie":80.0},{"state":"GA","dest":"Savannah","seasonBegin":"May 1","seasonEnd":"September 30","lodging":147.0,"mie":80.0},{"state":"IA","dest":"Dallas","seasonBegin":"","seasonEnd":"","lodging":115.0,"mie":80.0},{"state":"IA","dest":"Des Moines","seasonBegin":"","seasonEnd":"","lodging":121.0,"mie":80.0},{"state":"ID","dest":"Boise","seasonBegin":"October 1","seasonEnd":"October 31","lodging":191.0,"mie":86.0},{"state":"ID","dest":"Boise","seasonBegin":"November 1","seasonEnd":"May 31","lodging":167.0,"mie":86.0},{"state":"ID","dest":"Boise","seasonBegin":"June 1","seasonEnd":"September 30","lodging":191.0,"mie":86.0},{"state":"ID","dest":"Coeur d'Alene","seasonBegin":"October 1","seasonEnd":"May 31","lodging":142.0,"mie":74.0},{"state":"ID","dest":"Coeur d'Alene","seasonBegin":"June 1","seasonEnd":"August 31","lodging":217.0,"mie":74.0},{"state":"ID","dest":"Coeur d'Alene","seasonBegin":"September 1","seasonEnd":"September 30","lodging":142.0,"mie":74.0},{"state":"ID","dest":"Sun Valley / Ketchum","seasonBegin":"October 1","seasonEnd":"November 30","lodging":191.0,"mie":80.0},{"state":"ID","dest":"Sun Valley / Ketchum","seasonBegin":"December 1","seasonEnd":"March 31","lodging":300.0,"mie":80.0},{"state":"ID","dest":"Sun Valley / Ketchum","seasonBegin":"April 1","seasonEnd":"May 31","lodging":181.0,"mie":80.0},{"state":"ID","dest":"Sun Valley / Ketchum","seasonBegin":"June 1","seasonEnd":"September 30","lodging":295.0,"mie":80.0},{"state":"IL","dest":"Bolingbrook / Romeoville / Lemont","seasonBegin":"","seasonEnd":"","lodging":114.0,"mie":74.0},{"state":"IL","dest":"Chicago","seasonBegin":"October 1","seasonEnd":"November 30","lodging":223.0,"mie":92.0},{"state":"IL","dest":"Chicago","seasonBegin":"December 1","seasonEnd":"March 31","lodging":142.0,"mie":92.0},{"state":"IL","dest":"Chicago","seasonBegin":"April 1","seasonEnd":"June 30","lodging":234.0,"mie":92.0},{"state":"IL","dest":"Chicago","seasonBegin":"July 1","seasonEnd":"August 31","lodging":202.0,"mie":92.0},{"state":"IL","dest":"Chicago","seasonBegin":"September 1","seasonEnd":"September 30","lodging":223.0,"mie":92.0},{"state":"IL","dest":"East St. Louis / O'Fallon / Fairview Heights","seasonBegin":"","seasonEnd":"","lodging":150.0,"mie":86.0},{"state":"IL","dest":"Oak Brook Terrace","seasonBegin":"","seasonEnd":"","lodging":115.0,"mie":80.0},{"state":"IN","dest":"Bloomington","seasonBegin":"October 1","seasonEnd":"April 30","lodging":110.0,"mie":74.0},{"state":"IN","dest":"Bloomington","seasonBegin":"May 1","seasonEnd":"August 31","lodging":139.0,"mie":74.0},{"state":"IN","dest":"Bloomington","seasonBegin":"September 1","seasonEnd":"September 30","lodging":110.0,"mie":74.0},{"state":"IN","dest":"Indianapolis / Carmel","seasonBegin":"","seasonEnd":"","lodging":133.0,"mie":80.0},{"state":"IN","dest":"Lafayette / West Lafayette","seasonBegin":"October 1","seasonEnd":"July 31","lodging":123.0,"mie":74.0},{"state":"IN","dest":"Lafayette / West Lafayette","seasonBegin":"August 1","seasonEnd":"September 30","lodging":143.0,"mie":74.0},{"state":"KS","dest":"Kansas City / Overland Park","seasonBegin":"","seasonEnd":"","lodging":135.0,"mie":80.0},{"state":"KY","dest":"Boone","seasonBegin":"","seasonEnd":"","lodging":116.0,"mie":68.0},{"state":"KY","dest":"Kenton","seasonBegin":"","seasonEnd":"","lodging":163.0,"mie":86.0},{"state":"KY","dest":"Lexington","seasonBegin":"","seasonEnd":"","lodging":118.0,"mie":80.0},{"state":"KY","dest":"Louisville","seasonBegin":"October 1","seasonEnd":"October 31","lodging":164.0,"mie":80.0},{"state":"KY","dest":"Louisville","seasonBegin":"November 1","seasonEnd":"January 31","lodging":120.0,"mie":80.0},{"state":"KY","dest":"Louisville","seasonBegin":"February 1","seasonEnd":"May 31","lodging":155.0,"mie":80.0},{"state":"KY","dest":"Louisville","seasonBegin":"June 1","seasonEnd":"August 31","lodging":134.0,"mie":80.0},{"state":"KY","dest":"Louisville","seasonBegin":"September 1","seasonEnd":"September 30","lodging":164.0,"mie":80.0},{"state":"LA","dest":"Alexandria / Leesville / Natchitoches","seasonBegin":"","seasonEnd":"","lodging":112.0,"mie":68.0},{"state":"LA","dest":"New Orleans","seasonBegin":"October 1","seasonEnd":"January 31","lodging":157.0,"mie":80.0},{"state":"LA","dest":"New Orleans","seasonBegin":"February 1","seasonEnd":"May 31","lodging":179.0,"mie":80.0},{"state":"LA","dest":"New Orleans","seasonBegin":"June 1","seasonEnd":"August 31","lodging":133.0,"mie":80.0},{"state":"LA","dest":"New Orleans","seasonBegin":"September 1","seasonEnd":"September 30","lodging":157.0,"mie":80.0},{"state":"MA","dest":"Andover","seasonBegin":"","seasonEnd":"","lodging":137.0,"mie":80.0},{"state":"MA","dest":"Boston / Cambridge","seasonBegin":"October 1","seasonEnd":"October 31","lodging":349.0,"mie":92.0},{"state":"MA","dest":"Boston / Cambridge","seasonBegin":"November 1","seasonEnd":"February 28","lodging":209.0,"mie":92.0},{"state":"MA","dest":"Boston / Cambridge","seasonBegin":"March 1","seasonEnd":"August 31","lodging":291.0,"mie":92.0},{"state":"MA","dest":"Boston / Cambridge","seasonBegin":"September 1","seasonEnd":"September 30","lodging":349.0,"mie":92.0},{"state":"MA","dest":"Burlington / Woburn","seasonBegin":"October 1","seasonEnd":"October 31","lodging":178.0,"mie":86.0},{"state":"MA","dest":"Burlington / Woburn","seasonBegin":"November 1","seasonEnd":"April 30","lodging":144.0,"mie":86.0},{"state":"MA","dest":"Burlington / Woburn","seasonBegin":"May 1","seasonEnd":"September 30","lodging":178.0,"mie":86.0},{"state":"MA","dest":"Falmouth","seasonBegin":"October 1","seasonEnd":"June 30","lodging":142.0,"mie":86.0},{"state":"MA","dest":"Falmouth","seasonBegin":"July 1","seasonEnd":"August 31","lodging":253.0,"mie":86.0},{"state":"MA","dest":"Falmouth","seasonBegin":"September 1","seasonEnd":"September 30","lodging":142.0,"mie":86.0},{"state":"MA","dest":"Hyannis","seasonBegin":"October 1","seasonEnd":"June 30","lodging":131.0,"mie":92.0},{"state":"MA","dest":"Hyannis","seasonBegin":"July 1","seasonEnd":"August 31","lodging":209.0,"mie":92.0},{"state":"MA","dest":"Hyannis","seasonBegin":"September 1","seasonEnd":"September 30","lodging":131.0,"mie":92.0},{"state":"MA","dest":"Martha's Vineyard","seasonBegin":"October 1","seasonEnd":"May 31","lodging":196.0,"mie":92.0},{"state":"MA","dest":"Martha's Vineyard","seasonBegin":"June 1","seasonEnd":"September 30","lodging":462.0,"mie":92.0},{"state":"MA","dest":"Nantucket","seasonBegin":"October 1","seasonEnd":"May 31","lodging":175.0,"mie":92.0},{"state":"MA","dest":"Nantucket","seasonBegin":"June 1","seasonEnd":"September 30","lodging":471.0,"mie":92.0},{"state":"MA","dest":"Northampton","seasonBegin":"","seasonEnd":"","lodging":157.0,"mie":80.0},{"state":"MA","dest":"Pittsfield","seasonBegin":"October 1","seasonEnd":"June 30","lodging":136.0,"mie":86.0},{"state":"MA","dest":"Pittsfield","seasonBegin":"July 1","seasonEnd":"August 31","lodging":178.0,"mie":86.0},{"state":"MA","dest":"Pittsfield","seasonBegin":"September 1","seasonEnd":"September 30","lodging":136.0,"mie":86.0},{"state":"MA","dest":"Plymouth / Taunton / New Bedford","seasonBegin":"","seasonEnd":"","lodging":126.0,"mie":80.0},{"state":"MA","dest":"Quincy","seasonBegin":"October 1","seasonEnd":"October 31","lodging":175.0,"mie":80.0},{"state":"MA","dest":"Quincy","seasonBegin":"November 1","seasonEnd":"April 30","lodging":139.0,"mie":80.0},{"state":"MA","dest":"Quincy","seasonBegin":"May 1","seasonEnd":"September 30","lodging":175.0,"mie":80.0},{"state":"MA","dest":"Springfield","seasonBegin":"","seasonEnd":"","lodging":128.0,"mie":74.0},{"state":"MA","dest":"Worcester","seasonBegin":"","seasonEnd":"","lodging":135.0,"mie":80.0},{"state":"MD","dest":"Aberdeen / Bel Air / Belcamp","seasonBegin":"","seasonEnd":"","lodging":113.0,"mie":74.0},{"state":"MD","dest":"Annapolis","seasonBegin":"October 1","seasonEnd":"October 31","lodging":161.0,"mie":80.0},{"state":"MD","dest":"Annapolis","seasonBegin":"November 1","seasonEnd":"April 30","lodging":125.0,"mie":80.0},{"state":"MD","dest":"Annapolis","seasonBegin":"May 1","seasonEnd":"September 30","lodging":161.0,"mie":80.0},{"state":"MD","dest":"Baltimore City","seasonBegin":"","seasonEnd":"","lodging":150.0,"mie":86.0},{"state":"MD","dest":"Cambridge / St. Michaels","seasonBegin":"October 1","seasonEnd":"May 31","lodging":145.0,"mie":80.0},{"state":"MD","dest":"Cambridge / St. Michaels","seasonBegin":"June 1","seasonEnd":"August 31","lodging":186.0,"mie":80.0},{"state":"MD","dest":"Cambridge / St. Michaels","seasonBegin":"September 1","seasonEnd":"September 30","lodging":145.0,"mie":80.0},{"state":"MD","dest":"Centreville","seasonBegin":"October 1","seasonEnd":"October 31","lodging":154.0,"mie":74.0},{"state":"MD","dest":"Centreville","seasonBegin":"November 1","seasonEnd":"April 30","lodging":121.0,"mie":74.0},{"state":"MD","dest":"Centreville","seasonBegin":"May 1","seasonEnd":"September 30","lodging":154.0,"mie":74.0},{"state":"MD","dest":"Columbia","seasonBegin":"","seasonEnd":"","lodging":113.0,"mie":86.0},{"state":"MD","dest":"Ocean City","seasonBegin":"October 1","seasonEnd":"May 31","lodging":115.0,"mie":80.0},{"state":"MD","dest":"Ocean City","seasonBegin":"June 1","seasonEnd":"August 31","lodging":295.0,"mie":80.0},{"state":"MD","dest":"Ocean City","seasonBegin":"September 1","seasonEnd":"September 30","lodging":115.0,"mie":80.0},{"state":"ME","dest":"Bar Harbor / Rockport","seasonBegin":"October 1","seasonEnd":"October 31","lodging":264.0,"mie":92.0},{"state":"ME","dest":"Bar Harbor / Rockport","seasonBegin":"November 1","seasonEnd":"April 30","lodging":128.0,"mie":92.0},{"state":"ME","dest":"Bar Harbor / Rockport","seasonBegin":"May 1","seasonEnd":"June 30","lodging":209.0,"mie":92.0},{"state":"ME","dest":"Bar Harbor / Rockport","seasonBegin":"July 1","seasonEnd":"August 31","lodging":304.0,"mie":92.0},{"state":"ME","dest":"Bar Harbor / Rockport","seasonBegin":"September 1","seasonEnd":"September 30","lodging":264.0,"mie":92.0},{"state":"ME","dest":"Kennebunk / Kittery / Sanford","seasonBegin":"October 1","seasonEnd":"October 31","lodging":153.0,"mie":86.0},{"state":"ME","dest":"Kennebunk / Kittery / Sanford","seasonBegin":"November 1","seasonEnd":"June 30","lodging":119.0,"mie":86.0},{"state":"ME","dest":"Kennebunk / Kittery / Sanford","seasonBegin":"July 1","seasonEnd":"August 31","lodging":201.0,"mie":86.0},{"state":"ME","dest":"Kennebunk / Kittery / Sanford","seasonBegin":"September 1","seasonEnd":"September 30","lodging":153.0,"mie":86.0},{"state":"ME","dest":"Portland","seasonBegin":"October 1","seasonEnd":"October 31","lodging":199.0,"mie":80.0},{"state":"ME","dest":"Portland","seasonBegin":"November 1","seasonEnd":"May 31","lodging":114.0,"mie":80.0},{"state":"ME","dest":"Portland","seasonBegin":"June 1","seasonEnd":"August 31","lodging":211.0,"mie":80.0},{"state":"ME","dest":"Portland","seasonBegin":"September 1","seasonEnd":"September 30","lodging":199.0,"mie":80.0},{"state":"MI","dest":"Ann Arbor","seasonBegin":"October 1","seasonEnd":"March 31","lodging":125.0,"mie":80.0},{"state":"MI","dest":"Ann Arbor","seasonBegin":"April 1","seasonEnd":"August 31","lodging":146.0,"mie":80.0},{"state":"MI","dest":"Ann Arbor","seasonBegin":"September 1","seasonEnd":"September 30","lodging":125.0,"mie":80.0},{"state":"MI","dest":"Detroit","seasonBegin":"","seasonEnd":"","lodging":152.0,"mie":74.0},{"state":"MI","dest":"Grand Rapids","seasonBegin":"","seasonEnd":"","lodging":119.0,"mie":80.0},{"state":"MI","dest":"Holland","seasonBegin":"October 1","seasonEnd":"April 30","lodging":116.0,"mie":74.0},{"state":"MI","dest":"Holland","seasonBegin":"May 1","seasonEnd":"August 31","lodging":157.0,"mie":74.0},{"state":"MI","dest":"Holland","seasonBegin":"September 1","seasonEnd":"September 30","lodging":116.0,"mie":74.0},{"state":"MI","dest":"Mackinac Island","seasonBegin":"October 1","seasonEnd":"June 30","lodging":120.0,"mie":86.0},{"state":"MI","dest":"Mackinac Island","seasonBegin":"July 1","seasonEnd":"August 31","lodging":195.0,"mie":86.0},{"state":"MI","dest":"Mackinac Island","seasonBegin":"September 1","seasonEnd":"September 30","lodging":120.0,"mie":86.0},{"state":"MI","dest":"Midland","seasonBegin":"","seasonEnd":"","lodging":120.0,"mie":74.0},{"state":"MI","dest":"Muskegon","seasonBegin":"October 1","seasonEnd":"May 31","lodging":110.0,"mie":68.0},{"state":"MI","dest":"Muskegon","seasonBegin":"June 1","seasonEnd":"August 31","lodging":149.0,"mie":68.0},{"state":"MI","dest":"Muskegon","seasonBegin":"September 1","seasonEnd":"September 30","lodging":110.0,"mie":68.0},{"state":"MI","dest":"Petoskey","seasonBegin":"October 1","seasonEnd":"October 31","lodging":171.0,"mie":86.0},{"state":"MI","dest":"Petoskey","seasonBegin":"November 1","seasonEnd":"May 31","lodging":116.0,"mie":86.0},{"state":"MI","dest":"Petoskey","seasonBegin":"June 1","seasonEnd":"August 31","lodging":220.0,"mie":86.0},{"state":"MI","dest":"Petoskey","seasonBegin":"September 1","seasonEnd":"September 30","lodging":171.0,"mie":86.0},{"state":"MI","dest":"Pontiac / Auburn Hills","seasonBegin":"","seasonEnd":"","lodging":116.0,"mie":80.0},{"state":"MI","dest":"South Haven","seasonBegin":"October 1","seasonEnd":"May 31","lodging":110.0,"mie":68.0},{"state":"MI","dest":"South Haven","seasonBegin":"June 1","seasonEnd":"August 31","lodging":142.0,"mie":68.0},{"state":"MI","dest":"South Haven","seasonBegin":"September 1","seasonEnd":"September 30","lodging":110.0,"mie":68.0},{"state":"MI","dest":"Traverse City","seasonBegin":"October 1","seasonEnd":"June 30","lodging":134.0,"mie":80.0},{"state":"MI","dest":"Traverse City","seasonBegin":"July 1","seasonEnd":"August 31","lodging":235.0,"mie":80.0},{"state":"MI","dest":"Traverse City","seasonBegin":"September 1","seasonEnd":"September 30","lodging":134.0,"mie":80.0},{"state":"MN","dest":"Duluth","seasonBegin":"October 1","seasonEnd":"October 31","lodging":220.0,"mie":86.0},{"state":"MN","dest":"Duluth","seasonBegin":"November 1","seasonEnd":"May 31","lodging":159.0,"mie":86.0},{"state":"MN","dest":"Duluth","seasonBegin":"June 1","seasonEnd":"September 30","lodging":220.0,"mie":86.0},{"state":"MN","dest":"Minneapolis / St. Paul","seasonBegin":"","seasonEnd":"","lodging":148.0,"mie":92.0},{"state":"MN","dest":"Rochester","seasonBegin":"","seasonEnd":"","lodging":127.0,"mie":80.0},{"state":"MO","dest":"Kansas City","seasonBegin":"","seasonEnd":"","lodging":135.0,"mie":80.0},{"state":"MO","dest":"St. Louis","seasonBegin":"","seasonEnd":"","lodging":150.0,"mie":86.0},{"state":"MS","dest":"Oxford","seasonBegin":"","seasonEnd":"","lodging":127.0,"mie":68.0},{"state":"MS","dest":"Southaven","seasonBegin":"","seasonEnd":"","lodging":126.0,"mie":68.0},{"state":"MS","dest":"Starkville","seasonBegin":"","seasonEnd":"","lodging":125.0,"mie":68.0},{"state":"MT","dest":"Big Sky / West Yellowstone/Gardiner","seasonBegin":"October 1","seasonEnd":"May 31","lodging":176.0,"mie":80.0},{"state":"MT","dest":"Big Sky / West Yellowstone/Gardiner","seasonBegin":"June 1","seasonEnd":"September 30","lodging":310.0,"mie":80.0},{"state":"MT","dest":"Helena","seasonBegin":"","seasonEnd":"","lodging":132.0,"mie":74.0},{"state":"MT","dest":"Kalispell/Whitefish","seasonBegin":"October 1","seasonEnd":"June 30","lodging":124.0,"mie":80.0},{"state":"MT","dest":"Kalispell/Whitefish","seasonBegin":"July 1","seasonEnd":"September 30","lodging":232.0,"mie":80.0},{"state":"MT","dest":"Missoula","seasonBegin":"October 1","seasonEnd":"May 31","lodging":130.0,"mie":74.0},{"state":"MT","dest":"Missoula","seasonBegin":"June 1","seasonEnd":"September 30","lodging":195.0,"mie":74.0},{"state":"NC","dest":"Asheville","seasonBegin":"October 1","seasonEnd":"December 31","lodging":141.0,"mie":80.0},{"state":"NC","dest":"Asheville","seasonBegin":"January 1","seasonEnd":"September 30","lodging":120.0,"mie":80.0},{"state":"NC","dest":"Atlantic Beach / Morehead City","seasonBegin":"October 1","seasonEnd":"April 30","lodging":123.0,"mie":74.0},{"state":"NC","dest":"Atlantic Beach / Morehead City","seasonBegin":"May 1","seasonEnd":"August 31","lodging":178.0,"mie":74.0},{"state":"NC","dest":"Atlantic Beach / Morehead City","seasonBegin":"September 1","seasonEnd":"September 30","lodging":123.0,"mie":74.0},{"state":"NC","dest":"Chapel Hill","seasonBegin":"","seasonEnd":"","lodging":140.0,"mie":80.0},{"state":"NC","dest":"Charlotte","seasonBegin":"","seasonEnd":"","lodging":131.0,"mie":80.0},{"state":"NC","dest":"Durham","seasonBegin":"","seasonEnd":"","lodging":121.0,"mie":74.0},{"state":"NC","dest":"Fayetteville","seasonBegin":"","seasonEnd":"","lodging":124.0,"mie":68.0},{"state":"NC","dest":"Greensboro","seasonBegin":"October 1","seasonEnd":"October 31","lodging":123.0,"mie":74.0},{"state":"NC","dest":"Greensboro","seasonBegin":"November 1","seasonEnd":"February 28","lodging":112.0,"mie":74.0},{"state":"NC","dest":"Greensboro","seasonBegin":"March 1","seasonEnd":"September 30","lodging":123.0,"mie":74.0},{"state":"NC","dest":"Kill Devil Hills","seasonBegin":"October 1","seasonEnd":"March 31","lodging":133.0,"mie":74.0},{"state":"NC","dest":"Kill Devil Hills","seasonBegin":"April 1","seasonEnd":"May 31","lodging":190.0,"mie":74.0},{"state":"NC","dest":"Kill Devil Hills","seasonBegin":"June 1","seasonEnd":"August 31","lodging":254.0,"mie":74.0},{"state":"NC","dest":"Kill Devil Hills","seasonBegin":"September 1","seasonEnd":"September 30","lodging":133.0,"mie":74.0},{"state":"NC","dest":"Raleigh","seasonBegin":"","seasonEnd":"","lodging":131.0,"mie":74.0},{"state":"NC","dest":"Wilmington","seasonBegin":"October 1","seasonEnd":"October 31","lodging":147.0,"mie":74.0},{"state":"NC","dest":"Wilmington","seasonBegin":"November 1","seasonEnd":"February 28","lodging":110.0,"mie":74.0},{"state":"NC","dest":"Wilmington","seasonBegin":"March 1","seasonEnd":"September 30","lodging":147.0,"mie":74.0},{"state":"NE","dest":"Omaha","seasonBegin":"","seasonEnd":"","lodging":122.0,"mie":80.0},{"state":"NH","dest":"Concord","seasonBegin":"","seasonEnd":"","lodging":124.0,"mie":74.0},{"state":"NH","dest":"Conway","seasonBegin":"October 1","seasonEnd":"February 28","lodging":144.0,"mie":80.0},{"state":"NH","dest":"Conway","seasonBegin":"March 1","seasonEnd":"June 30","lodging":118.0,"mie":80.0},{"state":"NH","dest":"Conway","seasonBegin":"July 1","seasonEnd":"August 31","lodging":161.0,"mie":80.0},{"state":"NH","dest":"Conway","seasonBegin":"September 1","seasonEnd":"September 30","lodging":144.0,"mie":80.0},{"state":"NH","dest":"Durham","seasonBegin":"October 1","seasonEnd":"June 30","lodging":125.0,"mie":74.0},{"state":"NH","dest":"Durham","seasonBegin":"July 1","seasonEnd":"August 31","lodging":152.0,"mie":74.0},{"state":"NH","dest":"Durham","seasonBegin":"September 1","seasonEnd":"September 30","lodging":125.0,"mie":74.0},{"state":"NH","dest":"Laconia","seasonBegin":"October 1","seasonEnd":"October 31","lodging":182.0,"mie":74.0},{"state":"NH","dest":"Laconia","seasonBegin":"November 1","seasonEnd":"May 31","lodging":140.0,"mie":74.0},{"state":"NH","dest":"Laconia","seasonBegin":"June 1","seasonEnd":"September 30","lodging":182.0,"mie":74.0},{"state":"NH","dest":"Lebanon / Lincoln / West Lebanon","seasonBegin":"October 1","seasonEnd":"October 31","lodging":177.0,"mie":74.0},{"state":"NH","dest":"Lebanon / Lincoln / West Lebanon","seasonBegin":"November 1","seasonEnd":"May 31","lodging":142.0,"mie":74.0},{"state":"NH","dest":"Lebanon / Lincoln / West Lebanon","seasonBegin":"June 1","seasonEnd":"September 30","lodging":177.0,"mie":74.0},{"state":"NH","dest":"Manchester","seasonBegin":"","seasonEnd":"","lodging":130.0,"mie":74.0},{"state":"NH","dest":"Portsmouth","seasonBegin":"October 1","seasonEnd":"October 31","lodging":171.0,"mie":74.0},{"state":"NH","dest":"Portsmouth","seasonBegin":"November 1","seasonEnd":"June 30","lodging":129.0,"mie":74.0},{"state":"NH","dest":"Portsmouth","seasonBegin":"July 1","seasonEnd":"August 31","lodging":192.0,"mie":74.0},{"state":"NH","dest":"Portsmouth","seasonBegin":"September 1","seasonEnd":"September 30","lodging":171.0,"mie":74.0},{"state":"NJ","dest":"Cherry Hill / Moorestown","seasonBegin":"","seasonEnd":"","lodging":112.0,"mie":80.0},{"state":"NJ","dest":"Eatontown / Freehold","seasonBegin":"","seasonEnd":"","lodging":146.0,"mie":86.0},{"state":"NJ","dest":"Edison / Piscataway","seasonBegin":"","seasonEnd":"","lodging":122.0,"mie":80.0},{"state":"NJ","dest":"Flemington","seasonBegin":"","seasonEnd":"","lodging":124.0,"mie":80.0},{"state":"NJ","dest":"Newark","seasonBegin":"","seasonEnd":"","lodging":156.0,"mie":86.0},{"state":"NJ","dest":"Parsippany","seasonBegin":"","seasonEnd":"","lodging":143.0,"mie":80.0},{"state":"NJ","dest":"Princeton / Trenton","seasonBegin":"","seasonEnd":"","lodging":138.0,"mie":86.0},{"state":"NJ","dest":"Somerset","seasonBegin":"","seasonEnd":"","lodging":138.0,"mie":80.0},{"state":"NJ","dest":"Springfield / Cranford / New Providence","seasonBegin":"","seasonEnd":"","lodging":139.0,"mie":80.0},{"state":"NJ","dest":"Toms River","seasonBegin":"October 1","seasonEnd":"June 30","lodging":166.0,"mie":74.0},{"state":"NJ","dest":"Toms River","seasonBegin":"July 1","seasonEnd":"August 31","lodging":213.0,"mie":74.0},{"state":"NJ","dest":"Toms River","seasonBegin":"September 1","seasonEnd":"September 30","lodging":166.0,"mie":74.0},{"state":"NM","dest":"Albuquerque","seasonBegin":"","seasonEnd":"","lodging":144.0,"mie":80.0},{"state":"NM","dest":"Carlsbad","seasonBegin":"","seasonEnd":"","lodging":155.0,"mie":74.0},{"state":"NM","dest":"Santa Fe","seasonBegin":"October 1","seasonEnd":"October 31","lodging":167.0,"mie":80.0},{"state":"NM","dest":"Santa Fe","seasonBegin":"November 1","seasonEnd":"December 31","lodging":142.0,"mie":80.0},{"state":"NM","dest":"Santa Fe","seasonBegin":"January 1","seasonEnd":"February 28","lodging":122.0,"mie":80.0},{"state":"NM","dest":"Santa Fe","seasonBegin":"March 1","seasonEnd":"September 30","lodging":167.0,"mie":80.0},{"state":"NM","dest":"Taos","seasonBegin":"","seasonEnd":"","lodging":128.0,"mie":74.0},{"state":"NV","dest":"Incline Village / Reno / Sparks","seasonBegin":"October 1","seasonEnd":"June 30","lodging":138.0,"mie":80.0},{"state":"NV","dest":"Incline Village / Reno / Sparks","seasonBegin":"July 1","seasonEnd":"August 31","lodging":184.0,"mie":80.0},{"state":"NV","dest":"Incline Village / Reno / Sparks","seasonBegin":"September 1","seasonEnd":"September 30","lodging":138.0,"mie":80.0},{"state":"NV","dest":"Las Vegas","seasonBegin":"October 1","seasonEnd":"December 31","lodging":126.0,"mie":86.0},{"state":"NV","dest":"Las Vegas","seasonBegin":"January 1","seasonEnd":"March 31","lodging":159.0,"mie":86.0},{"state":"NV","dest":"Las Vegas","seasonBegin":"April 1","seasonEnd":"September 30","lodging":126.0,"mie":86.0},{"state":"NY","dest":"Albany","seasonBegin":"","seasonEnd":"","lodging":117.0,"mie":86.0},{"state":"NY","dest":"Binghamton","seasonBegin":"","seasonEnd":"","lodging":117.0,"mie":74.0},{"state":"NY","dest":"Buffalo","seasonBegin":"October 1","seasonEnd":"June 30","lodging":126.0,"mie":80.0},{"state":"NY","dest":"Buffalo","seasonBegin":"July 1","seasonEnd":"August 31","lodging":139.0,"mie":80.0},{"state":"NY","dest":"Buffalo","seasonBegin":"September 1","seasonEnd":"September 30","lodging":126.0,"mie":80.0},{"state":"NY","dest":"Floral Park / Garden City / Great Neck","seasonBegin":"","seasonEnd":"","lodging":164.0,"mie":86.0},{"state":"NY","dest":"Glens Falls","seasonBegin":"October 1","seasonEnd":"June 30","lodging":117.0,"mie":86.0},{"state":"NY","dest":"Glens Falls","seasonBegin":"July 1","seasonEnd":"August 31","lodging":186.0,"mie":86.0},{"state":"NY","dest":"Glens Falls","seasonBegin":"September 1","seasonEnd":"September 30","lodging":117.0,"mie":86.0},{"state":"NY","dest":"Ithaca","seasonBegin":"","seasonEnd":"","lodging":144.0,"mie":80.0},{"state":"NY","dest":"Kingston","seasonBegin":"","seasonEnd":"","lodging":139.0,"mie":86.0},{"state":"NY","dest":"Lake Placid","seasonBegin":"October 1","seasonEnd":"February 28","lodging":165.0,"mie":86.0},{"state":"NY","dest":"Lake Placid","seasonBegin":"March 1","seasonEnd":"June 30","lodging":144.0,"mie":86.0},{"state":"NY","dest":"Lake Placid","seasonBegin":"July 1","seasonEnd":"August 31","lodging":238.0,"mie":86.0},{"state":"NY","dest":"Lake Placid","seasonBegin":"September 1","seasonEnd":"September 30","lodging":165.0,"mie":86.0},{"state":"NY","dest":"New York City","seasonBegin":"October 1","seasonEnd":"December 31","lodging":342.0,"mie":92.0},{"state":"NY","dest":"New York City","seasonBegin":"January 1","seasonEnd":"February 28","lodging":179.0,"mie":92.0},{"state":"NY","dest":"New York City","seasonBegin":"March 1","seasonEnd":"June 30","lodging":281.0,"mie":92.0},{"state":"NY","dest":"New York City","seasonBegin":"July 1","seasonEnd":"August 31","lodging":237.0,"mie":92.0},{"state":"NY","dest":"New York City","seasonBegin":"September 1","seasonEnd":"September 30","lodging":342.0,"mie":92.0},{"state":"NY","dest":"Niagara Falls","seasonBegin":"October 1","seasonEnd":"May 31","lodging":110.0,"mie":80.0},{"state":"NY","dest":"Niagara Falls","seasonBegin":"June 1","seasonEnd":"August 31","lodging":142.0,"mie":80.0},{"state":"NY","dest":"Niagara Falls","seasonBegin":"September 1","seasonEnd":"September 30","lodging":110.0,"mie":80.0},{"state":"NY","dest":"Nyack / Palisades","seasonBegin":"","seasonEnd":"","lodging":129.0,"mie":80.0},{"state":"NY","dest":"Poughkeepsie","seasonBegin":"","seasonEnd":"","lodging":115.0,"mie":80.0},{"state":"NY","dest":"Riverhead / Ronkonkoma / Melville","seasonBegin":"","seasonEnd":"","lodging":155.0,"mie":86.0},{"state":"NY","dest":"Rochester","seasonBegin":"","seasonEnd":"","lodging":132.0,"mie":80.0},{"state":"NY","dest":"Saratoga Springs / Schenectady","seasonBegin":"October 1","seasonEnd":"June 30","lodging":126.0,"mie":80.0},{"state":"NY","dest":"Saratoga Springs / Schenectady","seasonBegin":"July 1","seasonEnd":"August 31","lodging":214.0,"mie":80.0},{"state":"NY","dest":"Saratoga Springs / Schenectady","seasonBegin":"September 1","seasonEnd":"September 30","lodging":126.0,"mie":80.0},{"state":"NY","dest":"Syracuse / Oswego","seasonBegin":"","seasonEnd":"","lodging":122.0,"mie":80.0},{"state":"NY","dest":"Tarrytown / White Plains / New Rochelle","seasonBegin":"","seasonEnd":"","lodging":161.0,"mie":92.0},{"state":"NY","dest":"Troy","seasonBegin":"","seasonEnd":"","lodging":121.0,"mie":80.0},{"state":"NY","dest":"West Point","seasonBegin":"","seasonEnd":"","lodging":123.0,"mie":80.0},{"state":"OH","dest":"Cincinnati","seasonBegin":"","seasonEnd":"","lodging":163.0,"mie":86.0},{"state":"OH","dest":"Cleveland","seasonBegin":"","seasonEnd":"","lodging":159.0,"mie":80.0},{"state":"OH","dest":"Columbus","seasonBegin":"","seasonEnd":"","lodging":131.0,"mie":80.0},{"state":"OH","dest":"Dayton / Fairborn","seasonBegin":"","seasonEnd":"","lodging":115.0,"mie":74.0},{"state":"OH","dest":"Hamilton","seasonBegin":"","seasonEnd":"","lodging":124.0,"mie":74.0},{"state":"OH","dest":"Sandusky","seasonBegin":"October 1","seasonEnd":"November 30","lodging":116.0,"mie":68.0},{"state":"OH","dest":"Sandusky","seasonBegin":"December 1","seasonEnd":"August 31","lodging":144.0,"mie":68.0},{"state":"OH","dest":"Sandusky","seasonBegin":"September 1","seasonEnd":"September 30","lodging":116.0,"mie":68.0},{"state":"OK","dest":"Oklahoma City","seasonBegin":"","seasonEnd":"","lodging":116.0,"mie":80.0},{"state":"OR","dest":"Beaverton","seasonBegin":"","seasonEnd":"","lodging":132.0,"mie":80.0},{"state":"OR","dest":"Bend","seasonBegin":"October 1","seasonEnd":"May 31","lodging":125.0,"mie":86.0},{"state":"OR","dest":"Bend","seasonBegin":"June 1","seasonEnd":"August 31","lodging":192.0,"mie":86.0},{"state":"OR","dest":"Bend","seasonBegin":"September 1","seasonEnd":"September 30","lodging":125.0,"mie":86.0},{"state":"OR","dest":"Clackamas","seasonBegin":"","seasonEnd":"","lodging":136.0,"mie":80.0},{"state":"OR","dest":"Eugene / Florence","seasonBegin":"October 1","seasonEnd":"May 31","lodging":132.0,"mie":80.0},{"state":"OR","dest":"Eugene / Florence","seasonBegin":"June 1","seasonEnd":"July 31","lodging":192.0,"mie":80.0},{"state":"OR","dest":"Eugene / Florence","seasonBegin":"August 1","seasonEnd":"September 30","lodging":162.0,"mie":80.0},{"state":"OR","dest":"Lincoln City","seasonBegin":"October 1","seasonEnd":"June 30","lodging":120.0,"mie":92.0},{"state":"OR","dest":"Lincoln City","seasonBegin":"July 1","seasonEnd":"August 31","lodging":167.0,"mie":92.0},{"state":"OR","dest":"Lincoln City","seasonBegin":"September 1","seasonEnd":"September 30","lodging":120.0,"mie":92.0},{"state":"OR","dest":"Portland","seasonBegin":"","seasonEnd":"","lodging":155.0,"mie":86.0},{"state":"OR","dest":"Seaside","seasonBegin":"October 1","seasonEnd":"June 30","lodging":141.0,"mie":86.0},{"state":"OR","dest":"Seaside","seasonBegin":"July 1","seasonEnd":"August 31","lodging":236.0,"mie":86.0},{"state":"OR","dest":"Seaside","seasonBegin":"September 1","seasonEnd":"September 30","lodging":141.0,"mie":86.0},{"state":"PA","dest":"Allentown / Easton / Bethlehem","seasonBegin":"","seasonEnd":"","lodging":115.0,"mie":74.0},{"state":"PA","dest":"Bucks","seasonBegin":"","seasonEnd":"","lodging":119.0,"mie":80.0},{"state":"PA","dest":"Chester / Radnor / Essington","seasonBegin":"","seasonEnd":"","lodging":127.0,"mie":80.0},{"state":"PA","dest":"Gettysburg","seasonBegin":"October 1","seasonEnd":"October 31","lodging":122.0,"mie":68.0},{"state":"PA","dest":"Gettysburg","seasonBegin":"November 1","seasonEnd":"March 31","lodging":110.0,"mie":68.0},{"state":"PA","dest":"Gettysburg","seasonBegin":"April 1","seasonEnd":"September 30","lodging":122.0,"mie":68.0},{"state":"PA","dest":"Harrisburg","seasonBegin":"","seasonEnd":"","lodging":124.0,"mie":74.0},{"state":"PA","dest":"Hershey","seasonBegin":"October 1","seasonEnd":"May 31","lodging":145.0,"mie":80.0},{"state":"PA","dest":"Hershey","seasonBegin":"June 1","seasonEnd":"August 31","lodging":196.0,"mie":80.0},{"state":"PA","dest":"Hershey","seasonBegin":"September 1","seasonEnd":"September 30","lodging":145.0,"mie":80.0},{"state":"PA","dest":"Lancaster","seasonBegin":"","seasonEnd":"","lodging":123.0,"mie":74.0},{"state":"PA","dest":"Malvern / Frazer / Berwyn","seasonBegin":"","seasonEnd":"","lodging":118.0,"mie":80.0},{"state":"PA","dest":"Montgomery","seasonBegin":"","seasonEnd":"","lodging":126.0,"mie":80.0},{"state":"PA","dest":"Philadelphia","seasonBegin":"October 1","seasonEnd":"November 30","lodging":218.0,"mie":92.0},{"state":"PA","dest":"Philadelphia","seasonBegin":"December 1","seasonEnd":"March 31","lodging":156.0,"mie":92.0},{"state":"PA","dest":"Philadelphia","seasonBegin":"April 1","seasonEnd":"August 31","lodging":187.0,"mie":92.0},{"state":"PA","dest":"Philadelphia","seasonBegin":"September 1","seasonEnd":"September 30","lodging":218.0,"mie":92.0},{"state":"PA","dest":"Pittsburgh","seasonBegin":"","seasonEnd":"","lodging":138.0,"mie":80.0},{"state":"PA","dest":"Reading","seasonBegin":"","seasonEnd":"","lodging":117.0,"mie":74.0},{"state":"PA","dest":"State College","seasonBegin":"","seasonEnd":"","lodging":124.0,"mie":74.0},{"state":"RI","dest":"Jamestown / Middletown / Newport","seasonBegin":"October 1","seasonEnd":"October 31","lodging":218.0,"mie":80.0},{"state":"RI","dest":"Jamestown / Middletown / Newport","seasonBegin":"November 1","seasonEnd":"May 31","lodging":141.0,"mie":80.0},{"state":"RI","dest":"Jamestown / Middletown / Newport","seasonBegin":"June 1","seasonEnd":"August 31","lodging":268.0,"mie":80.0},{"state":"RI","dest":"Jamestown / Middletown / Newport","seasonBegin":"September 1","seasonEnd":"September 30","lodging":218.0,"mie":80.0},{"state":"RI","dest":"Providence / Bristol","seasonBegin":"","seasonEnd":"","lodging":154.0,"mie":80.0},{"state":"SC","dest":"Charleston","seasonBegin":"October 1","seasonEnd":"October 31","lodging":244.0,"mie":92.0},{"state":"SC","dest":"Charleston","seasonBegin":"November 1","seasonEnd":"February 28","lodging":218.0,"mie":92.0},{"state":"SC","dest":"Charleston","seasonBegin":"March 1","seasonEnd":"May 31","lodging":288.0,"mie":92.0},{"state":"SC","dest":"Charleston","seasonBegin":"June 1","seasonEnd":"September 30","lodging":244.0,"mie":92.0},{"state":"SC","dest":"Columbia","seasonBegin":"","seasonEnd":"","lodging":115.0,"mie":74.0},{"state":"SC","dest":"Hilton Head","seasonBegin":"October 1","seasonEnd":"October 31","lodging":163.0,"mie":80.0},{"state":"SC","dest":"Hilton Head","seasonBegin":"November 1","seasonEnd":"February 28","lodging":118.0,"mie":80.0},{"state":"SC","dest":"Hilton Head","seasonBegin":"March 1","seasonEnd":"May 31","lodging":193.0,"mie":80.0},{"state":"SC","dest":"Hilton Head","seasonBegin":"June 1","seasonEnd":"August 31","lodging":215.0,"mie":80.0},{"state":"SC","dest":"Hilton Head","seasonBegin":"September 1","seasonEnd":"September 30","lodging":163.0,"mie":80.0},{"state":"SC","dest":"Myrtle Beach","seasonBegin":"October 1","seasonEnd":"March 31","lodging":110.0,"mie":74.0},{"state":"SC","dest":"Myrtle Beach","seasonBegin":"April 1","seasonEnd":"May 31","lodging":132.0,"mie":74.0},{"state":"SC","dest":"Myrtle Beach","seasonBegin":"June 1","seasonEnd":"August 31","lodging":182.0,"mie":74.0},{"state":"SC","dest":"Myrtle Beach","seasonBegin":"September 1","seasonEnd":"September 30","lodging":110.0,"mie":74.0},{"state":"SD","dest":"Deadwood / Spearfish","seasonBegin":"October 1","seasonEnd":"October 31","lodging":140.0,"mie":80.0},{"state":"SD","dest":"Deadwood / Spearfish","seasonBegin":"November 1","seasonEnd":"April 30","lodging":110.0,"mie":80.0},{"state":"SD","dest":"Deadwood / Spearfish","seasonBegin":"May 1","seasonEnd":"September 30","lodging":140.0,"mie":80.0},{"state":"SD","dest":"Hot Springs","seasonBegin":"October 1","seasonEnd":"May 31","lodging":110.0,"mie":74.0},{"state":"SD","dest":"Hot Springs","seasonBegin":"June 1","seasonEnd":"September 30","lodging":161.0,"mie":74.0},{"state":"SD","dest":"Rapid City","seasonBegin":"October 1","seasonEnd":"May 31","lodging":110.0,"mie":74.0},{"state":"SD","dest":"Rapid City","seasonBegin":"June 1","seasonEnd":"August 31","lodging":158.0,"mie":74.0},{"state":"SD","dest":"Rapid City","seasonBegin":"September 1","seasonEnd":"September 30","lodging":110.0,"mie":74.0},{"state":"TN","dest":"Brentwood / Franklin","seasonBegin":"","seasonEnd":"","lodging":130.0,"mie":86.0},{"state":"TN","dest":"Chattanooga","seasonBegin":"","seasonEnd":"","lodging":117.0,"mie":74.0},{"state":"TN","dest":"Knoxville","seasonBegin":"","seasonEnd":"","lodging":119.0,"mie":74.0},{"state":"TN","dest":"Memphis","seasonBegin":"","seasonEnd":"","lodging":129.0,"mie":74.0},{"state":"TN","dest":"Nashville","seasonBegin":"October 1","seasonEnd":"October 31","lodging":248.0,"mie":86.0},{"state":"TN","dest":"Nashville","seasonBegin":"November 1","seasonEnd":"August 31","lodging":217.0,"mie":86.0},{"state":"TN","dest":"Nashville","seasonBegin":"September 1","seasonEnd":"September 30","lodging":248.0,"mie":86.0},{"state":"TX","dest":"Arlington / Fort Worth / Grapevine","seasonBegin":"","seasonEnd":"","lodging":181.0,"mie":80.0},{"state":"TX","dest":"Austin","seasonBegin":"October 1","seasonEnd":"December 31","lodging":173.0,"mie":80.0},{"state":"TX","dest":"Austin","seasonBegin":"January 1","seasonEnd":"March 31","lodging":187.0,"mie":80.0},{"state":"TX","dest":"Austin","seasonBegin":"April 1","seasonEnd":"September 30","lodging":173.0,"mie":80.0},{"state":"TX","dest":"Big Spring","seasonBegin":"","seasonEnd":"","lodging":114.0,"mie":68.0},{"state":"TX","dest":"Dallas","seasonBegin":"October 1","seasonEnd":"December 31","lodging":170.0,"mie":80.0},{"state":"TX","dest":"Dallas","seasonBegin":"January 1","seasonEnd":"March 31","lodging":191.0,"mie":80.0},{"state":"TX","dest":"Dallas","seasonBegin":"April 1","seasonEnd":"September 30","lodging":170.0,"mie":80.0},{"state":"TX","dest":"Galveston","seasonBegin":"October 1","seasonEnd":"May 31","lodging":111.0,"mie":74.0},{"state":"TX","dest":"Galveston","seasonBegin":"June 1","seasonEnd":"July 31","lodging":146.0,"mie":74.0},{"state":"TX","dest":"Galveston","seasonBegin":"August 1","seasonEnd":"September 30","lodging":111.0,"mie":74.0},{"state":"TX","dest":"Houston","seasonBegin":"","seasonEnd":"","lodging":128.0,"mie":80.0},{"state":"TX","dest":"Midland / Odessa","seasonBegin":"October 1","seasonEnd":"October 31","lodging":132.0,"mie":74.0},{"state":"TX","dest":"Midland / Odessa","seasonBegin":"November 1","seasonEnd":"January 31","lodging":118.0,"mie":74.0},{"state":"TX","dest":"Midland / Odessa","seasonBegin":"February 1","seasonEnd":"September 30","lodging":132.0,"mie":74.0},{"state":"TX","dest":"Pecos","seasonBegin":"","seasonEnd":"","lodging":121.0,"mie":74.0},{"state":"TX","dest":"Plano","seasonBegin":"","seasonEnd":"","lodging":123.0,"mie":80.0},{"state":"TX","dest":"San Antonio","seasonBegin":"October 1","seasonEnd":"January 31","lodging":137.0,"mie":74.0},{"state":"TX","dest":"San Antonio","seasonBegin":"February 1","seasonEnd":"March 31","lodging":161.0,"mie":74.0},{"state":"TX","dest":"San Antonio","seasonBegin":"April 1","seasonEnd":"September 30","lodging":137.0,"mie":74.0},{"state":"TX","dest":"South Padre Island","seasonBegin":"October 1","seasonEnd":"February 28","lodging":118.0,"mie":74.0},{"state":"TX","dest":"South Padre Island","seasonBegin":"March 1","seasonEnd":"July 31","lodging":140.0,"mie":74.0},{"state":"TX","dest":"South Padre Island","seasonBegin":"August 1","seasonEnd":"September 30","lodging":118.0,"mie":74.0},{"state":"UT","dest":"Moab","seasonBegin":"October 1","seasonEnd":"October 31","lodging":221.0,"mie":86.0},{"state":"UT","dest":"Moab","seasonBegin":"November 1","seasonEnd":"February 28","lodging":110.0,"mie":86.0},{"state":"UT","dest":"Moab","seasonBegin":"March 1","seasonEnd":"June 30","lodging":212.0,"mie":86.0},{"state":"UT","dest":"Moab","seasonBegin":"July 1","seasonEnd":"August 31","lodging":166.0,"mie":86.0},{"state":"UT","dest":"Moab","seasonBegin":"September 1","seasonEnd":"September 30","lodging":221.0,"mie":86.0},{"state":"UT","dest":"Park City","seasonBegin":"October 1","seasonEnd":"November 30","lodging":221.0,"mie":92.0},{"state":"UT","dest":"Park City","seasonBegin":"December 1","seasonEnd":"March 31","lodging":483.0,"mie":92.0},{"state":"UT","dest":"Park City","seasonBegin":"April 1","seasonEnd":"September 30","lodging":221.0,"mie":92.0},{"state":"UT","dest":"Provo","seasonBegin":"","seasonEnd":"","lodging":117.0,"mie":74.0},{"state":"UT","dest":"Salt Lake City","seasonBegin":"","seasonEnd":"","lodging":142.0,"mie":80.0},{"state":"VA","dest":"Blacksburg","seasonBegin":"","seasonEnd":"","lodging":122.0,"mie":68.0},{"state":"VA","dest":"Charlottesville","seasonBegin":"","seasonEnd":"","lodging":136.0,"mie":80.0},{"state":"VA","dest":"Loudoun","seasonBegin":"","seasonEnd":"","lodging":115.0,"mie":80.0},{"state":"VA","dest":"Lynchburg","seasonBegin":"October 1","seasonEnd":"May 31","lodging":115.0,"mie":68.0},{"state":"VA","dest":"Lynchburg","seasonBegin":"June 1","seasonEnd":"July 31","lodging":110.0,"mie":68.0},{"state":"VA","dest":"Lynchburg","seasonBegin":"August 1","seasonEnd":"September 30","lodging":115.0,"mie":68.0},{"state":"VA","dest":"Richmond","seasonBegin":"","seasonEnd":"","lodging":157.0,"mie":80.0},{"state":"VA","dest":"Roanoke","seasonBegin":"","seasonEnd":"","lodging":119.0,"mie":74.0},{"state":"VA","dest":"Virginia Beach","seasonBegin":"October 1","seasonEnd":"May 31","lodging":124.0,"mie":74.0},{"state":"VA","dest":"Virginia Beach","seasonBegin":"June 1","seasonEnd":"August 31","lodging":210.0,"mie":74.0},{"state":"VA","dest":"Virginia Beach","seasonBegin":"September 1","seasonEnd":"September 30","lodging":124.0,"mie":74.0},{"state":"VA","dest":"Wallops Island","seasonBegin":"October 1","seasonEnd":"June 30","lodging":131.0,"mie":68.0},{"state":"VA","dest":"Wallops Island","seasonBegin":"July 1","seasonEnd":"August 31","lodging":248.0,"mie":68.0},{"state":"VA","dest":"Wallops Island","seasonBegin":"September 1","seasonEnd":"September 30","lodging":131.0,"mie":68.0},{"state":"VA","dest":"Williamsburg / York","seasonBegin":"October 1","seasonEnd":"December 31","lodging":115.0,"mie":80.0},{"state":"VA","dest":"Williamsburg / York","seasonBegin":"January 1","seasonEnd":"March 31","lodging":110.0,"mie":80.0},{"state":"VA","dest":"Williamsburg / York","seasonBegin":"April 1","seasonEnd":"August 31","lodging":134.0,"mie":80.0},{"state":"VA","dest":"Williamsburg / York","seasonBegin":"September 1","seasonEnd":"September 30","lodging":115.0,"mie":80.0},{"state":"VT","dest":"Burlington","seasonBegin":"October 1","seasonEnd":"October 31","lodging":202.0,"mie":86.0},{"state":"VT","dest":"Burlington","seasonBegin":"November 1","seasonEnd":"April 30","lodging":128.0,"mie":86.0},{"state":"VT","dest":"Burlington","seasonBegin":"May 1","seasonEnd":"September 30","lodging":202.0,"mie":86.0},{"state":"VT","dest":"Manchester","seasonBegin":"October 1","seasonEnd":"October 31","lodging":220.0,"mie":86.0},{"state":"VT","dest":"Manchester","seasonBegin":"November 1","seasonEnd":"July 31","lodging":168.0,"mie":86.0},{"state":"VT","dest":"Manchester","seasonBegin":"August 1","seasonEnd":"September 30","lodging":220.0,"mie":86.0},{"state":"VT","dest":"Montpelier","seasonBegin":"October 1","seasonEnd":"October 31","lodging":227.0,"mie":74.0},{"state":"VT","dest":"Montpelier","seasonBegin":"November 1","seasonEnd":"July 31","lodging":167.0,"mie":74.0},{"state":"VT","dest":"Montpelier","seasonBegin":"August 1","seasonEnd":"September 30","lodging":227.0,"mie":74.0},{"state":"VT","dest":"Stowe","seasonBegin":"October 1","seasonEnd":"February 28","lodging":185.0,"mie":86.0},{"state":"VT","dest":"Stowe","seasonBegin":"March 1","seasonEnd":"May 31","lodging":148.0,"mie":86.0},{"state":"VT","dest":"Stowe","seasonBegin":"June 1","seasonEnd":"September 30","lodging":185.0,"mie":86.0},{"state":"VT","dest":"White River Junction","seasonBegin":"","seasonEnd":"","lodging":144.0,"mie":86.0},{"state":"WA","dest":"Everett / Lynnwood","seasonBegin":"October 1","seasonEnd":"May 31","lodging":113.0,"mie":86.0},{"state":"WA","dest":"Everett / Lynnwood","seasonBegin":"June 1","seasonEnd":"August 31","lodging":140.0,"mie":86.0},{"state":"WA","dest":"Everett / Lynnwood","seasonBegin":"September 1","seasonEnd":"September 30","lodging":113.0,"mie":86.0},{"state":"WA","dest":"Ocean Shores","seasonBegin":"October 1","seasonEnd":"June 30","lodging":110.0,"mie":86.0},{"state":"WA","dest":"Ocean Shores","seasonBegin":"July 1","seasonEnd":"August 31","lodging":132.0,"mie":86.0},{"state":"WA","dest":"Ocean Shores","seasonBegin":"September 1","seasonEnd":"September 30","lodging":110.0,"mie":86.0},{"state":"WA","dest":"Olympia / Tumwater","seasonBegin":"October 1","seasonEnd":"November 30","lodging":128.0,"mie":80.0},{"state":"WA","dest":"Olympia / Tumwater","seasonBegin":"December 1","seasonEnd":"June 30","lodging":151.0,"mie":80.0},{"state":"WA","dest":"Olympia / Tumwater","seasonBegin":"July 1","seasonEnd":"August 31","lodging":175.0,"mie":80.0},{"state":"WA","dest":"Olympia / Tumwater","seasonBegin":"September 1","seasonEnd":"September 30","lodging":128.0,"mie":80.0},{"state":"WA","dest":"Port Angeles / Port Townsend","seasonBegin":"October 1","seasonEnd":"June 30","lodging":137.0,"mie":92.0},{"state":"WA","dest":"Port Angeles / Port Townsend","seasonBegin":"July 1","seasonEnd":"August 31","lodging":235.0,"mie":92.0},{"state":"WA","dest":"Port Angeles / Port Townsend","seasonBegin":"September 1","seasonEnd":"September 30","lodging":137.0,"mie":92.0},{"state":"WA","dest":"Richland / Pasco","seasonBegin":"","seasonEnd":"","lodging":130.0,"mie":86.0},{"state":"WA","dest":"Seattle","seasonBegin":"October 1","seasonEnd":"May 31","lodging":188.0,"mie":92.0},{"state":"WA","dest":"Seattle","seasonBegin":"June 1","seasonEnd":"September 30","lodging":248.0,"mie":92.0},{"state":"WA","dest":"Spokane","seasonBegin":"","seasonEnd":"","lodging":126.0,"mie":86.0},{"state":"WA","dest":"Tacoma","seasonBegin":"","seasonEnd":"","lodging":136.0,"mie":86.0},{"state":"WA","dest":"Vancouver","seasonBegin":"","seasonEnd":"","lodging":155.0,"mie":86.0},{"state":"WI","dest":"Madison","seasonBegin":"October 1","seasonEnd":"October 31","lodging":138.0,"mie":80.0},{"state":"WI","dest":"Madison","seasonBegin":"November 1","seasonEnd":"April 30","lodging":110.0,"mie":80.0},{"state":"WI","dest":"Madison","seasonBegin":"May 1","seasonEnd":"September 30","lodging":138.0,"mie":80.0},{"state":"WI","dest":"Milwaukee","seasonBegin":"","seasonEnd":"","lodging":140.0,"mie":80.0},{"state":"WI","dest":"Sturgeon Bay","seasonBegin":"October 1","seasonEnd":"October 31","lodging":133.0,"mie":80.0},{"state":"WI","dest":"Sturgeon Bay","seasonBegin":"November 1","seasonEnd":"May 31","lodging":110.0,"mie":80.0},{"state":"WI","dest":"Sturgeon Bay","seasonBegin":"June 1","seasonEnd":"September 30","lodging":133.0,"mie":80.0},{"state":"WV","dest":"Charles Town","seasonBegin":"","seasonEnd":"","lodging":122.0,"mie":68.0},{"state":"WV","dest":"Charleston","seasonBegin":"","seasonEnd":"","lodging":115.0,"mie":68.0},{"state":"WY","dest":"Cody","seasonBegin":"October 1","seasonEnd":"May 31","lodging":127.0,"mie":74.0},{"state":"WY","dest":"Cody","seasonBegin":"June 1","seasonEnd":"September 30","lodging":190.0,"mie":74.0},{"state":"WY","dest":"Jackson / Pinedale","seasonBegin":"October 1","seasonEnd":"May 31","lodging":212.0,"mie":92.0},{"state":"WY","dest":"Jackson / Pinedale","seasonBegin":"June 1","seasonEnd":"September 30","lodging":420.0,"mie":92.0}];
+
+  let gsaRows = [];
+  let indexByState = new Map();
+  let uniqueDestByState = new Map();
+  let selectedGsa = null;
+  let currentPackage = {};
+
+  function norm(s) {
+    if (!s) return "";
+    return String(s)
+      .toUpperCase()
+      .trim()
+      .replace(/[.,]/g, " ")
+      .replace(/\s+/g, " ")
+      .replace(/\bSAINT\b/g, "ST")
+      .replace(/\bFORT\b/g, "FT")
+      .replace(/\bMOUNT\b/g, "MT");
+  }
+
+  function fmtNumberSmart(n) {
+    if (!isFinite(n)) return "";
+    const rounded = Math.round(n * 100) / 100;
+    const isInt = Math.abs(rounded - Math.round(rounded)) < 1e-9;
+    return rounded.toLocaleString(undefined, {
+      minimumFractionDigits: isInt ? 0 : 1,
+      maximumFractionDigits: 2
+    });
+  }
+
+  function moneySmart(n) {
+    if (!isFinite(n)) return "";
+    return "$" + fmtNumberSmart(n);
+  }
+
+  function floorDollars(n) {
+    if (!isFinite(n)) return 0;
+    return Math.floor(n);
+  }
+
+  function roundToNearestFiveEnding(n) {
+    if (!isFinite(n)) return 0;
+    const base = Math.round(n);
+    const remainder = ((base % 5) + 5) % 5;
+    const down = base - remainder;
+    const up = down + 5;
+    return (Math.abs(base - down) <= Math.abs(up - base)) ? down : up;
+  }
+
+  function formatDateMDY(dateStr) {
+    if (!dateStr) return "";
+    const d = new Date(dateStr + "T00:00:00");
+    if (isNaN(d.getTime())) return dateStr;
+    const m = d.getMonth() + 1;
+    const day = d.getDate();
+    const y = d.getFullYear();
+    return m + "/" + day + "/" + y;
+  }
+
+  function addDays(dateStr, days) {
+    if (!dateStr) return "";
+    const d = new Date(dateStr + "T00:00:00");
+    if (isNaN(d.getTime())) return "";
+    d.setDate(d.getDate() + days);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + day;
+  }
+
+  function diffDays(startStr, endStr) {
+    if (!startStr || !endStr) return NaN;
+    const s = new Date(startStr + "T00:00:00");
+    const e = new Date(endStr + "T00:00:00");
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return NaN;
+    const ms = e.getTime() - s.getTime();
+    return Math.round(ms / (1000 * 60 * 60 * 24));
+  }
+
+  function computeWeeksRounded(startStr, endStr) {
+    const d = diffDays(startStr, endStr);
+    if (!isFinite(d) || d < 0) return 0;
+    return Math.max(1, Math.round((d + 2) / 7));
+  }
+
+  function computeEndFromWeeks(startStr, weeks) {
+    if (!startStr || !isFinite(weeks) || weeks <= 0) return "";
+    const daysToAdd = (weeks * 7) - 2;
+    return addDays(startStr, daysToAdd);
+  }
+
+  let syncingDates = false;
+
+  function syncDatesFromWeeks() {
+    if (syncingDates) return;
+    const s = el("startDate").value;
+    const w = parseInt(el("durationWeeks").value || "0", 10);
+    if (!s || !isFinite(w) || w <= 0) return;
+    syncingDates = true;
+    el("endDate").value = computeEndFromWeeks(s, w);
+    syncingDates = false;
+  }
+
+  function syncDatesFromEnd() {
+    if (syncingDates) return;
+    const s = el("startDate").value;
+    const e = el("endDate").value;
+    if (!s || !e) return;
+    const w = computeWeeksRounded(s, e);
+    if (!w) return;
+    syncingDates = true;
+    el("durationWeeks").value = String(w);
+    syncingDates = false;
+  }
+
+  function syncDatesFromStartPreferWeeks() {
+    const s = el("startDate").value;
+    if (!s) return;
+    const w = parseInt(el("durationWeeks").value || "0", 10);
+    const e = el("endDate").value;
+
+    if (isFinite(w) && w > 0) {
+      syncDatesFromWeeks();
+      return;
+    }
+    if (e) {
+      syncDatesFromEnd();
+      return;
+    }
+  }
+
+  function scheduleToHours(s) {
+    if (s === "3x12") return 36;
+    if (s === "4x10") return 40;
+    if (s === "5x8") return 40;
+    if (s === "4x12") return 48;
+    return 40;
+  }
+
+  function parseCsv(text) {
+    const rows = [];
+    let i = 0, field = "", row = [], inQuotes = false;
+    while (i < text.length) {
+      const c = text[i];
+      if (c === '"') {
+        if (inQuotes && text[i+1] === '"') { field += '"'; i += 2; continue; }
+        inQuotes = !inQuotes; i++; continue;
+      }
+      if (!inQuotes && (c === "," || c === "\n" || c === "\r")) {
+        row.push(field); field = "";
+        if (c !== ",") {
+          if (row.length > 1 || row[0] !== "") rows.push(row);
+          row = [];
+          if (c === "\r" && text[i+1] === "\n") i++;
+        }
+        i++; continue;
+      }
+      field += c; i++;
+    }
+    row.push(field);
+    if (row.length > 1 || row[0] !== "") rows.push(row);
+    return rows;
+  }
+
+  function monthNum(name) {
+    const m = {
+      JANUARY:1, FEBRUARY:2, MARCH:3, APRIL:4, MAY:5, JUNE:6,
+      JULY:7, AUGUST:8, SEPTEMBER:9, OCTOBER:10, NOVEMBER:11, DECEMBER:12
+    };
+    return m[norm(name)];
+  }
+
+  function parseMonthDay(s) {
+    if (!s) return null;
+    const parts = String(s).trim().split(/\s+/);
+    if (parts.length < 2) return null;
+    const mn = monthNum(parts[0]);
+    const d = parseInt(parts[1], 10);
+    if (!mn || !d) return null;
+    return { m: mn, d, key: mn * 100 + d };
+  }
+
+  function inSeason(startDate, beginStr, endStr) {
+    const b = parseMonthDay(beginStr);
+    const e = parseMonthDay(endStr);
+    if (!b || !e) return true;
+    const sd = new Date(startDate);
+    if (isNaN(sd.getTime())) return true;
+    const k = (sd.getMonth() + 1) * 100 + sd.getDate();
+    if (b.key <= e.key) return (k >= b.key && k <= e.key);
+    return (k >= b.key || k <= e.key);
+  }
+
+  function buildIndex(rows) {
+    indexByState = new Map();
+    uniqueDestByState = new Map();
+    for (const r of rows) {
+      if (!r.state) continue;
+      if (!indexByState.has(r.state)) indexByState.set(r.state, []);
+      indexByState.get(r.state).push(r);
+
+      if (!uniqueDestByState.has(r.state)) uniqueDestByState.set(r.state, new Set());
+      uniqueDestByState.get(r.state).add(r.dest);
+    }
+  }
+
+  function loadDestinationsForState(state) {
+    destList.innerHTML = "";
+    const set = uniqueDestByState.get(state);
+    if (!set) return;
+    const arr = Array.from(set).sort();
+    for (const d of arr) {
+      const opt = document.createElement("option");
+      opt.value = d;
+      destList.appendChild(opt);
+    }
+  }
+
+  function pickBestGsaRow() {
+    const state = facilityState.value;
+    const dest = el("facilityCity").value;
+    const start = el("startDate").value;
+
+    if (!gsaRows.length) {
+      selectedGsa = { lodging: CONUS.lodging, mie: CONUS.mie, dest: "STANDARD", state: "CONUS" };
+      gsaPicked.textContent = "GSA not loaded. Using standard CONUS fallback.";
+      gsaPicked.className = "hint warn";
+      return;
+    }
+
+    const rows = indexByState.get(state) || [];
+    const destN = norm(dest);
+    const matches = rows.filter(r => norm(r.dest) === destN);
+
+    if (!matches.length) {
+      selectedGsa = { lodging: CONUS.lodging, mie: CONUS.mie, dest: "STANDARD", state: "CONUS" };
+      gsaPicked.textContent = "No exact city match in GSA for this state. Using standard CONUS fallback. Pick from autocomplete for best results.";
+      gsaPicked.className = "hint warn";
+      return;
+    }
+
+    const seasonal = matches.filter(m => inSeason(start, m.seasonBegin, m.seasonEnd));
+    const pick = seasonal[0] || matches[0];
+
+    selectedGsa = pick;
+    gsaPicked.textContent = "GSA matched: " + pick.dest + ", " + pick.state;
+    gsaPicked.className = "hint ok";
+  }
+
+  function section(title, lines) {
+    return title + "\n\n" + lines.join("\n") + "\n";
+  }
+
+  function buildApprovalEmail(x) {
+    return (
+      section("ASSIGNMENT DETAILS", [
+        "JobID: " + (x.jobId || "{JOBID}"),
+        "Review Job: https://app.lotusone.com/#/vendor/jobs/details/" + (x.jobId || "{JOBID}"),
+        "Job Title: " + x.jobTitle,
+        "Facility: " + x.facilityName,
+        "Location: " + (x.facilityCity + ", " + x.facilityState),
+        "Start Date: " + formatDateMDY(x.startDate),
+        "End Date: " + formatDateMDY(x.endDate),
+        "Assignment Length: " + x.assignmentWeeks + " weeks",
+        "Schedule: " + x.schedule,
+        "Hours per Week: " + fmtNumberSmart(x.hours),
+        "Shift: " + x.shift
+      ]) + "\n" +
+
+      section("JOB INPUTS", [
+        "Bill Rate: " + moneySmart(x.billRate),
+        "Hours per Week: " + fmtNumberSmart(x.hours),
+        "On Call Bill Rate: " + moneySmart(x.onCallBillRate),
+        "Base Margin per Hour: " + moneySmart(x.marginPerHour),
+        "Bonus Deduction: " + moneySmart(x.bonusDeduction || 0),
+        "Adjusted Margin per Hour: " + ((x.assignmentWeeks && x.hours) ? moneySmart((x.totalGpAfterBonus || 0) / (x.hours * x.assignmentWeeks)) : moneySmart(0))
+      ]) + "\n" +
+
+      section("GSA", [
+        "Lodging: " + moneySmart(x.lodging),
+        "Meals: " + moneySmart(x.mie),
+        "Stipend Max: (" + fmtNumberSmart(x.lodging) + " + " + fmtNumberSmart(x.mie) + ") x 7 minus 20 = " + moneySmart(x.stipendTarget),
+        "Review GSA: " + x.gsaUrl
+      ]) + "\n" +
+
+      section("PAY PACKAGE", [
+        "Weekly Gross Pay: " + moneySmart(x.weeklyGross),
+        "Taxable Hourly Rate: " + moneySmart(x.taxableHourly),
+        "Overtime Rate: " + moneySmart(x.otHourly),
+        "Non Tax Weekly Stipend: " + moneySmart(x.stipendApplied),
+        "On Call Pay Rate: " + moneySmart(x.onCallPay)
+      ]) + "\n" +
+
+      section("PROFIT", [
+        "Weekly Gross Profit: " + moneySmart(x.weeklyGp),
+        "Monthly Gross Profit: " + moneySmart(x.monthlyGp),
+        "Total Gross Profit: " + moneySmart(x.totalGp) + " (" + x.assignmentWeeks + " weeks)",
+        "Total Gross Profit After Bonus: " + moneySmart(x.totalGpAfterBonus || x.totalGp)
+      ]).trim() + "\n"
+    );
+  }
+
+  function buildContractInsert(x) {
+    return (
+      section("ASSIGNMENT DETAILS", [
+        "Job Title: " + x.jobTitle,
+        "Facility: " + x.facilityName,
+        "Location: " + (x.facilityCity + ", " + x.facilityState),
+        "Start Date: " + formatDateMDY(x.startDate),
+        "End Date: " + formatDateMDY(x.endDate),
+        "Assignment Length: " + x.assignmentWeeks + " weeks",
+        "Schedule: " + x.schedule,
+        "Hours per Week: " + fmtNumberSmart(x.hours),
+        "Shift: " + x.shift
+      ]) + "\n" +
+
+      section("COMPENSATION", [
+        "Weekly Gross Pay: " + moneySmart(x.weeklyGross),
+        "Taxable Hourly Rate: " + moneySmart(x.taxableHourly),
+        "Overtime Rate: " + moneySmart(x.otHourly),
+        "Non Tax Weekly Stipend: " + moneySmart(x.stipendApplied),
+        "On Call Pay Rate: " + moneySmart(x.onCallPay)
+      ]).trim() + "\n"
+    );
+  }
+
+  function fillFieldsFromJobDiva(job) {
+    const pairs = {
+      contractorName: job.contractorName,
+      jobTitle: job.jobTitle || job.title,
+      facilityName: job.facilityName || job.facility,
+      facilityCity: job.facilityCity || job.city,
+      facilityState: job.facilityState || job.state,
+      startDate: job.startDate,
+      endDate: job.endDate,
+      schedule: job.schedule,
+      shift: job.shift,
+      billRate: job.billRate,
+      hoursPerWeek: job.hoursPerWeek,
+      onCallBillRate: job.onCallBillRate,
+      contractorAddress1: job.contractorAddress1,
+      contractorAddress2: job.contractorAddress2,
+      facilityAddress: job.facilityAddress,
+      facilityZip: job.facilityZip,
+      requestedTimeOff: job.requestedTimeOff,
+      extensionBonus: job.extensionBonus
+    };
+
+    Object.entries(pairs).forEach(([id, value]) => {
+      if (value == null || value === "" || !el(id)) return;
+      el(id).value = value;
+    });
+
+    if (job.payType === "LOCAL" || job.payType === "TRAVEL") setTab(job.payType);
+    loadDestinationsForState(facilityState.value);
+    calc();
+  }
+
+  async function importFromJobDiva() {
+    const jobId = (el("jobId").value || "").trim();
+    if (!jobId) {
+      el("emailStatus").textContent = "Enter a JobID first.";
+      return;
+    }
+
+    el("emailStatus").textContent = "Importing JobDiva data...";
+    try {
+      const response = await fetch("/api/jobdiva/jobs/" + encodeURIComponent(jobId));
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "JobDiva import failed.");
+      fillFieldsFromJobDiva(data.job || {});
+      el("emailStatus").textContent = data.source === "demo"
+        ? "Loaded demo JobDiva data. Add JOBDIVA_LOOKUP_URL to connect the real source."
+        : "Loaded JobDiva data.";
+    } catch (error) {
+      el("emailStatus").textContent = error.message;
+    }
+  }
+
+  function buildContractPayload() {
+    return {
+      jobId: (el("jobId").value || "").trim(),
+      contractorName: el("contractorName").value || "",
+      jobTitle: el("jobTitle").value || "",
+      facilityName: el("facilityName").value || "",
+      facilityCity: el("facilityCity").value || "",
+      facilityState: facilityState.value || "",
+      startDate: el("startDate").value || "",
+      endDate: el("endDate").value || "",
+      assignmentWeeks: currentPackage.assignmentWeeks || 0,
+      schedule: el("schedule").value || "",
+      shift: el("shift").value || "",
+      hours: currentPackage.hours || 0,
+      weeklyGross: currentPackage.weeklyGross || 0,
+      taxableHourly: currentPackage.taxableHourly || 0,
+      stipendApplied: currentPackage.stipendApplied || 0,
+      onCallPay: currentPackage.onCallPay || 0,
+      otHourly: currentPackage.otHourly || 0,
+      contractorAddress1: el("contractorAddress1").value || "",
+      contractorAddress2: el("contractorAddress2").value || "",
+      facilityAddress: el("facilityAddress").value || "",
+      facilityZip: el("facilityZip").value || "",
+      requestedTimeOff: el("requestedTimeOff").value || "",
+      extensionBonus: el("extensionBonus").value || ""
+    };
+  }
+
+  async function downloadWordContract() {
+    el("contractStatus").textContent = "Generating Word contract...";
+    try {
+      calc();
+      const payload = buildContractPayload();
+      const response = await fetch("/api/contracts/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "Word contract generation failed.");
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const jobId = payload.jobId || "draft";
+      a.href = url;
+      a.download = "contract-" + jobId + ".docx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      el("contractStatus").textContent = "Word contract downloaded.";
+    } catch (error) {
+      el("contractStatus").textContent = error.message;
+    }
+  }
+
+  /* Requested update: URL must include fiscal_year, state, and city */
+  function buildGsaUrl(fy, state, city) {
+    const fyEnc = encodeURIComponent(String(fy));
+    const stEnc = encodeURIComponent(String(state || "").trim().toUpperCase());
+    const cityClean = String(city || "").trim().toLowerCase();
+    const cityEnc = encodeURIComponent(cityClean);
+    return "https://www.gsa.gov/travel/plan-book/per-diem-rates/per-diem-rates-results" +
+      "?action=perdiems_report" +
+      "&fiscal_year=" + fyEnc +
+      "&state=" + stEnc +
+      "&city=" + cityEnc +
+      "&zip=";
+  }
+
+  function calc() {
+    pickBestGsaRow();
+
+    const BR = parseFloat(el("billRate").value || "0");
+    const H = parseFloat(el("hoursPerWeek").value || "0");
+    const M = parseFloat(el("marginPerHour").value || "0");
+    const onCallBR = parseFloat(el("onCallBillRate").value || "0");
+    const bonusDeduction = parseFloat(el("bonusDeduction").value || "0");
+    const payType = el("payType").value;
+
+    const startStr = el("startDate").value || "";
+    const endStr = el("endDate").value || "";
+    const assignmentWeeks = (startStr && endStr)
+      ? computeWeeksRounded(startStr, endStr)
+      : Math.max(0, parseInt(el("durationWeeks").value || "0", 10));
+
+    const onCallPay = floorDollars(onCallBR * 0.70);
+
+    const lodging = selectedGsa ? parseFloat(selectedGsa.lodging) : CONUS.lodging;
+    const mie = selectedGsa ? parseFloat(selectedGsa.mie) : CONUS.mie;
+
+    const gsaWeeklyMax = (lodging + mie) * 7;
+    const stipendTarget = Math.max(0, gsaWeeklyMax - 20);
+
+    // CA overtime split (only affects profit revenue split and OT bill rate display)
+    const stNow = (facilityState.value || "").toUpperCase();
+    const sched = (el("schedule").value || "");
+
+    function splitHoursCA(scheduleStr, hoursPerWeek){
+      // Prefer patterns like 4x10, 3x12, 5x8
+      const m = scheduleStr.match(/(\d+)\s*[xX]\s*(\d+(?:\.\d+)?)/);
+      if (m) {
+        const days = parseFloat(m[1]);
+        const hpd = parseFloat(m[2]);
+        const total = days * hpd;
+        const reg = days * Math.min(8, hpd);
+        const ot = Math.max(0, total - reg);
+        return { regularHours: reg, otHours: ot, totalHours: total };
+      }
+      // Fallback: weekly over 40 treated as OT
+      const H = Math.max(0, hoursPerWeek || 0);
+      const reg = Math.min(40, H);
+      const ot = Math.max(0, H - 40);
+      return { regularHours: reg, otHours: ot, totalHours: H };
+    }
+
+    const caSplit = (stNow === "CA") ? splitHoursCA(sched, H) : { regularHours: H, otHours: 0, totalHours: H };
+    const regHours = caSplit.regularHours;
+    const otHours = caSplit.otHours;
+    const otBillInput = parseFloat(el("otBillRate").value || "0");
+    const otBill = (stNow === "CA") ? (otBillInput || BR) : BR;
+
+    // Show OT Bill Rate field only for CA
+    el("otBillRateField").style.display = (stNow === "CA") ? "block" : "none";
+    if (stNow === "CA" && (!otBillInput) && BR > 0) el("otBillRate").value = String(Math.round(BR * 100) / 100);
+
+    // Pay budget does NOT use CA OT Bill Rate. OT Bill Rate is for profit only.
+    const hoursForPayBudget = (stNow === "CA") ? caSplit.totalHours : H;
+    const weeklyPayBudget = (BR - M) * hoursForPayBudget;
+
+
+    let stipendApplied = 0;
+    let taxableWeekly = 0;
+    let taxableHourly = 0;
+    let otHourly = 0;
+    let stipendReducedNote = "";
+
+    if (payType === "LOCAL") {
+      stipendApplied = 0;
+      taxableWeekly = weeklyPayBudget;
+      taxableHourly = (H > 0) ? taxableWeekly / H : 0;
+      if (stNow === "CA" && (regHours + otHours) > 0) {
+        const denom = regHours + 1.5 * otHours;
+        taxableHourly = (denom > 0) ? (taxableWeekly / denom) : taxableHourly;
+      }
+      otHourly = taxableHourly * 1.5;
+    } else {
+      // Travel stipend is capped at GSA max minus 20.
+      // Taxable hourly floor is 30 (base rate). In CA, total taxable pay uses weighted hours:
+      // taxablePay = baseRate * (regHours + 1.5 * otHours)
+      const denom = (stNow === "CA") ? (regHours + 1.5 * otHours) : H;
+
+      const taxableFloorWeekly = 30 * (denom || 0);
+      const taxableWeeklyCandidate = weeklyPayBudget - stipendTarget;
+
+      if (taxableWeeklyCandidate >= taxableFloorWeekly) {
+        taxableWeekly = taxableWeeklyCandidate;
+        stipendApplied = stipendTarget;
+      } else {
+        taxableWeekly = taxableFloorWeekly;
+        stipendApplied = weeklyPayBudget - taxableFloorWeekly;
+        if (stipendApplied < 0) stipendApplied = 0;
+        stipendReducedNote = "Stipend reduced to maintain 30 taxable floor.";
+      }
+
+      // Base taxable hourly rate
+      taxableHourly = (denom > 0) ? (taxableWeekly / denom) : 0;
+
+      // Enforce base-rate floor
+      if (taxableHourly < 30 && denom > 0) {
+        taxableHourly = 30;
+        taxableWeekly = taxableHourly * denom;
+        stipendApplied = Math.max(0, weeklyPayBudget - taxableWeekly);
+        stipendReducedNote = "Stipend reduced to maintain 30 taxable floor.";
+      }
+
+      otHourly = taxableHourly * 1.5;
+    }
+
+    let weeklyGross = taxableWeekly + stipendApplied;
+
+    const roundWeeklyPay = !!el("roundToFive")?.checked;
+    if (roundWeeklyPay) {
+      stipendApplied = roundToNearestFiveEnding(stipendApplied);
+      weeklyGross = roundToNearestFiveEnding(weeklyGross);
+      taxableWeekly = Math.max(0, weeklyGross - stipendApplied);
+      const recalcDenom = (stNow === "CA") ? (regHours + 1.5 * otHours) : H;
+      taxableHourly = (recalcDenom > 0) ? (taxableWeekly / recalcDenom) : 0;
+      otHourly = taxableHourly * 1.5;
+    }
+
+    const weeklyRevenue = (stNow === "CA") ? (BR * regHours + otBill * otHours) : (BR * H);
+    const weeklyGp = weeklyRevenue - weeklyGross;
+    const monthlyGp = weeklyGp * 4.33;
+    const totalGp = weeklyGp * (assignmentWeeks || 0);
+    const totalGpAfterBonus = totalGp - bonusDeduction;
+    const adjustedMarginPerHour = (assignmentWeeks && H) ? (totalGpAfterBonus / (H * assignmentWeeks)) : 0;
+
+    el("outWeeklyGross").textContent = moneySmart(weeklyGross);
+    el("outTaxableHourly").textContent = moneySmart(taxableHourly);
+    el("outOtHourly").textContent = moneySmart(otHourly);
+    el("outStipend").textContent = moneySmart(stipendApplied);
+    el("outOnCallPay").textContent = moneySmart(onCallPay);
+
+    el("outBaseMargin").textContent = moneySmart(M);
+    el("outMargin").textContent = assignmentWeeks ? moneySmart(adjustedMarginPerHour) : moneySmart(M);
+    el("outBonusDeduction").textContent = moneySmart(bonusDeduction);
+    el("outWeeklyGp").textContent = moneySmart(weeklyGp);
+    el("outMonthlyGp").textContent = moneySmart(monthlyGp);
+    el("outTotalGp").textContent = assignmentWeeks ? moneySmart(totalGp) : "";
+    el("outTotalGpAfterBonus").textContent = assignmentWeeks ? moneySmart(totalGpAfterBonus) : "";
+
+    el("stipendNote").textContent = stipendReducedNote;
+
+    el("gsaOneLine").textContent =
+      "GSA stipend max: (" + fmtNumberSmart(lodging) + " + " + fmtNumberSmart(mie) + ") x 7 minus 20 = " + moneySmart(stipendTarget);
+
+    const fy = 2026;
+    const st = facilityState.value;
+    const city = el("facilityCity").value || "";
+    const gsaUrl = buildGsaUrl(fy, st, city);
+    currentPackage = {
+      jobId: (el("jobId").value || "").trim(),
+      jobTitle: el("jobTitle").value || "",
+      facilityName: el("facilityName").value || "",
+      facilityCity: city,
+      facilityState: st,
+      startDate: startStr,
+      endDate: endStr,
+      assignmentWeeks: assignmentWeeks || 0,
+      schedule: el("schedule").value || "",
+      shift: el("shift").value || "",
+      billRate: BR,
+      hours: H,
+      onCallBillRate: onCallBR,
+      lodging, mie,
+      stipendTarget,
+      weeklyGross, taxableHourly, otHourly,
+      stipendApplied,
+      onCallPay,
+      marginPerHour: M,
+      bonusDeduction,
+      weeklyGp, monthlyGp, totalGp, totalGpAfterBonus,
+      gsaUrl
+    };
+
+    el("approvalBlock").value = buildApprovalEmail(currentPackage);
+el("contractBlock").value = buildContractInsert({
+      jobTitle: el("jobTitle").value || "",
+      facilityName: el("facilityName").value || "",
+      facilityCity: city,
+      facilityState: st,
+      startDate: startStr,
+      endDate: endStr,
+      assignmentWeeks: assignmentWeeks || 0,
+      schedule: el("schedule").value || "",
+      hours: H,
+      shift: el("shift").value || "",
+      weeklyGross, taxableHourly, otHourly,
+      stipendApplied,
+      onCallPay
+    });
+  }
+
+  function attachCopy(btnId, srcId) {
+    el(btnId).addEventListener("click", async () => {
+      const t = el(srcId);
+      t.focus();
+      t.select();
+      try {
+        await navigator.clipboard.writeText(t.value);
+      } catch (e) {
+        document.execCommand("copy");
+      }
+    });
+  }
+
+  function setTab(mode) {
+    el("payType").value = mode;
+
+    const travelActive = (mode === "TRAVEL");
+    el("tabTravel").classList.toggle("active", travelActive);
+    el("tabLocal").classList.toggle("active", !travelActive);
+    el("tabTravel").setAttribute("aria-selected", travelActive ? "true" : "false");
+    el("tabLocal").setAttribute("aria-selected", travelActive ? "false" : "true");
+    el("payTypeHint").textContent = travelActive ? "Travel uses stipend. Local is 100 percent taxable." : "Local is 100 percent taxable. Stipend is zero.";
+
+    calc();
+  }
+
+  function setDefaultDates() {
+    const s = el("startDate").value;
+    if (!s) return;
+    const w = parseInt(el("durationWeeks").value || "13", 10);
+    if (isFinite(w) && w > 0) {
+      el("endDate").value = computeEndFromWeeks(s, w);
+    }
+  }
+
+  el("tabTravel").addEventListener("click", () => setTab("TRAVEL"));
+  el("tabLocal").addEventListener("click", () => setTab("LOCAL"));
+
+  el("schedule").addEventListener("change", () => {
+    el("hoursPerWeek").value = String(scheduleToHours(el("schedule").value));
+    calc();
+  });
+
+  el("startDate").addEventListener("change", () => {
+    syncDatesFromStartPreferWeeks();
+    calc();
+  });
+
+  el("endDate").addEventListener("change", () => {
+    syncDatesFromEnd();
+    calc();
+  });
+
+  el("durationWeeks").addEventListener("change", () => {
+    syncDatesFromWeeks();
+    calc();
+  });
+
+  el("durationWeeks").addEventListener("input", () => {
+    syncDatesFromWeeks();
+    calc();
+  });
+
+  ["jobId","contractorName","jobTitle","facilityName","facilityCity","facilityState","shift",
+   "billRate","hoursPerWeek","onCallBillRate","bonusDeduction","marginPerHour","roundToFive"].forEach(id => {
+    const node = el(id);
+    if (!node) return;
+    node.addEventListener("input", () => calc());
+    node.addEventListener("change", () => {
+      if (id === "facilityState") loadDestinationsForState(facilityState.value);
+      calc();
+    });
+  });
+
+  el("marginSlider").addEventListener("input", (e) => {
+    el("marginPerHour").value = e.target.value;
+    calc();
+  });
+
+  el("marginPerHour").addEventListener("input", (e) => {
+    const v = Math.max(0, Math.min(60, Math.round(parseFloat(e.target.value || "0"))));
+    el("marginSlider").value = String(v);
+    calc();
+  });
+
+  attachCopy("copyApproval", "approvalBlock");
+  attachCopy("copyContract", "contractBlock");
+  el("importJobDiva").addEventListener("click", importFromJobDiva);
+  el("downloadWordContract").addEventListener("click", downloadWordContract);
+
+  el("openApprovalEmail").addEventListener("click", () => {
+    const to = (el("approverEmail").value || "").trim();
+    const subject = el("approvalSubject").value || "Contract approval request";
+    const body = el("approvalBlock").value;
+    const mailto = "mailto:" + encodeURIComponent(to) +
+      "?subject=" + encodeURIComponent(subject) +
+      "&body=" + encodeURIComponent(body);
+    window.location.href = mailto;
+    el("emailStatus").textContent = "Opened an approval email draft in your mail app.";
+  });
+
+  el("hoursPerWeek").value = "40";
+  // Auto load embedded GSA rows (no upload needed)
+  gsaRows = EMBEDDED_GSA_ROWS;
+  buildIndex(gsaRows);
+  loadDestinationsForState(facilityState.value);
+  // Initialize selection to CONUS until city match is picked
+  selectedGsa = { lodging: CONUS.lodging, mie: CONUS.mie, dest: "STANDARD", state: "CONUS" };
+
+  setTab("TRAVEL");
+
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, "0");
+  const d = String(today.getDate()).padStart(2, "0");
+  el("startDate").value = y + "-" + m + "-" + d;
+  setDefaultDates();
+  calc();
+})();
+</script>
+
+</body>
+</html>
