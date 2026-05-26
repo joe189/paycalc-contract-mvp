@@ -52,6 +52,8 @@
     .hint.ok { color: #0b6b2a; font-weight: 600; }
 
     .spacer8 { height: 8px; }
+    .copy-block-spacer { visibility: hidden; pointer-events: none; }
+    @media (max-width: 980px) { .copy-block-spacer { display: none; } }
 
   </style>
 </head>
@@ -308,6 +310,18 @@
         <div class="row">
           <button class="btn" id="copyContract" type="button">Copy</button>
           <button class="btn" id="downloadWordContract" type="button">Download Word Contract</button>
+        </div>
+      </div>
+      <div class="row copy-block-spacer" style="margin:8px 0;" aria-hidden="true">
+        <div class="field">
+          <label>&nbsp;</label>
+          <input type="text" tabindex="-1">
+          <div class="hint"></div>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <input type="text" tabindex="-1">
+          <div class="hint"></div>
         </div>
       </div>
       <textarea id="contractBlock" class="mono" rows="22"></textarea>
