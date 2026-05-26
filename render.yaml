@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: paycalc-contract-mvp
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production

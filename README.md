@@ -24,6 +24,18 @@ Open:
 
 No install step is required for the current MVP because it uses only built-in Node.js modules.
 
+## Deploy on Render
+
+This repo includes a `render.yaml` blueprint for a simple live web service.
+
+1. Push the latest code to GitHub.
+2. In Render, choose **New +** -> **Blueprint**.
+3. Connect the `joe189/paycalc-contract-mvp` repo.
+4. Apply the blueprint.
+5. Open the generated Render URL and verify `/api/health`.
+
+For the manual MVP, no environment variables are required. To connect real JobDiva data later, add `JOBDIVA_LOOKUP_URL` and optionally `JOBDIVA_API_TOKEN` in the Render service environment.
+
 ## JobDiva Lookup
 
 The app works without JobDiva credentials by returning demo data for the import button.

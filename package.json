@@ -12,5 +12,8 @@
   "license": "ISC",
   "description": "PayCalc contract generation and approval MVP",
   "type": "module",
-  "dependencies": {}
+  "dependencies": {},
+  "engines": {
+    "node": ">=20"
+  }
 }
