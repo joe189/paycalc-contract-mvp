@@ -599,6 +599,8 @@
         "Assignment Length: " + x.assignmentWeeks + " weeks",
         "Schedule: " + x.schedule,
         "Hours per Week: " + fmtNumberSmart(x.hours),
+        "Regular Hours: " + fmtNumberSmart(x.regularHours || x.hours),
+        "Overtime Hours: " + fmtNumberSmart(x.otHours || 0),
         "Shift: " + x.shift
       ]) + "\n" +
 
@@ -810,31 +812,20 @@
     const gsaWeeklyMax = (lodging + mie) * 7;
     const stipendTarget = Math.max(0, gsaWeeklyMax - 20);
 
-    // CA overtime split (only affects profit revenue split and OT bill rate display)
+    // Weekly overtime split: anything over 40 hours is paid at overtime.
     const stNow = (facilityState.value || "").toUpperCase();
-    const sched = (el("schedule").value || "");
 
-    function splitHoursCA(scheduleStr, hoursPerWeek){
-      // Prefer patterns like 4x10, 3x12, 5x8
-      const m = scheduleStr.match(/(\d+)\s*[xX]\s*(\d+(?:\.\d+)?)/);
-      if (m) {
-        const days = parseFloat(m[1]);
-        const hpd = parseFloat(m[2]);
-        const total = days * hpd;
-        const reg = days * Math.min(8, hpd);
-        const ot = Math.max(0, total - reg);
-        return { regularHours: reg, otHours: ot, totalHours: total };
-      }
-      // Fallback: weekly over 40 treated as OT
-      const H = Math.max(0, hoursPerWeek || 0);
-      const reg = Math.min(40, H);
-      const ot = Math.max(0, H - 40);
-      return { regularHours: reg, otHours: ot, totalHours: H };
+    function splitWeeklyOvertime(hoursPerWeek) {
+      const total = Math.max(0, hoursPerWeek || 0);
+      const regularHours = Math.min(40, total);
+      const otHours = Math.max(0, total - 40);
+      return { regularHours, otHours, totalHours: total };
     }
 
-    const caSplit = (stNow === "CA") ? splitHoursCA(sched, H) : { regularHours: H, otHours: 0, totalHours: H };
-    const regHours = caSplit.regularHours;
-    const otHours = caSplit.otHours;
+    const hourSplit = splitWeeklyOvertime(H);
+    const regHours = hourSplit.regularHours;
+    const otHours = hourSplit.otHours;
+    const weightedPayHours = regHours + 1.5 * otHours;
     const otBillInput = parseFloat(el("otBillRate").value || "0");
     const otBill = (stNow === "CA") ? (otBillInput || BR) : BR;
 
@@ -842,10 +833,7 @@
     el("otBillRateField").style.display = (stNow === "CA") ? "block" : "none";
     if (stNow === "CA" && (!otBillInput) && BR > 0) el("otBillRate").value = String(Math.round(BR * 100) / 100);
 
-    // Pay budget does NOT use CA OT Bill Rate. OT Bill Rate is for profit only.
-    const hoursForPayBudget = (stNow === "CA") ? caSplit.totalHours : H;
-    const weeklyPayBudget = (BR - M) * hoursForPayBudget;
-
+    const weeklyPayBudget = (BR - M) * H;
 
     let stipendApplied = 0;
     let taxableWeekly = 0;
@@ -856,17 +844,13 @@
     if (payType === "LOCAL") {
       stipendApplied = 0;
       taxableWeekly = weeklyPayBudget;
-      taxableHourly = (H > 0) ? taxableWeekly / H : 0;
-      if (stNow === "CA" && (regHours + otHours) > 0) {
-        const denom = regHours + 1.5 * otHours;
-        taxableHourly = (denom > 0) ? (taxableWeekly / denom) : taxableHourly;
-      }
+      taxableHourly = (weightedPayHours > 0) ? taxableWeekly / weightedPayHours : 0;
       otHourly = taxableHourly * 1.5;
     } else {
       // Travel stipend is capped at GSA max minus 20.
-      // Taxable hourly floor is 30 (base rate). In CA, total taxable pay uses weighted hours:
-      // taxablePay = baseRate * (regHours + 1.5 * otHours)
-      const denom = (stNow === "CA") ? (regHours + 1.5 * otHours) : H;
+      // Taxable pay uses weighted hours when weekly hours exceed 40:
+      // taxablePay = baseRate * regularHours + overtimeRate * overtimeHours.
+      const denom = weightedPayHours;
 
       const taxableFloorWeekly = 30 * (denom || 0);
       const taxableWeeklyCandidate = weeklyPayBudget - stipendTarget;
@@ -902,7 +886,7 @@
       stipendApplied = roundToNearestFiveEnding(stipendApplied);
       weeklyGross = roundToNearestFiveEnding(weeklyGross);
       taxableWeekly = Math.max(0, weeklyGross - stipendApplied);
-      const recalcDenom = (stNow === "CA") ? (regHours + 1.5 * otHours) : H;
+      const recalcDenom = weightedPayHours;
       taxableHourly = (recalcDenom > 0) ? (taxableWeekly / recalcDenom) : 0;
       otHourly = taxableHourly * 1.5;
     }
@@ -954,6 +938,8 @@
       lodging, mie,
       stipendTarget,
       weeklyGross, taxableHourly, otHourly,
+      regularHours: regHours,
+      otHours,
       stipendApplied,
       onCallPay,
       marginPerHour: M,
