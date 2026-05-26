@@ -193,7 +193,7 @@
       <div class="field">
         <label>Extension Bonus</label>
         <input id="extensionBonus" type="number" min="0" step="0.01" value="0">
-        <div class="hint">0 or blank removes the bonus row from the contract.</div>
+        <div class="hint">0 or blank removes the bonus row and profit deduction.</div>
       </div>
     </div>
   </div>
@@ -226,11 +226,6 @@
           <div class="hint"></div>
         </div>
 
-        <div class="field">
-          <label>Bonus Deduction</label>
-          <input id="bonusDeduction" type="number" min="0" step="0.01" value="0">
-          <div class="hint">One time bonus deducted from total gross profit.</div>
-        </div>
       </div>
 
       <div class="row" style="margin-top:10px;">
@@ -269,7 +264,7 @@
       <div class="spacer8"></div>
       <div class="small">Base Margin per Hour: <span id="outBaseMargin" class="ok"></span></div>
       <div class="small">Margin per Hour After Bonus: <span id="outMargin" class="ok"></span></div>
-      <div class="small">Bonus Deduction: <span id="outBonusDeduction" class="warn"></span></div>
+      <div class="small">Extension Bonus Deduction: <span id="outBonusDeduction" class="warn"></span></div>
       <div class="small">Weekly Gross Profit: <span id="outWeeklyGp" class="ok"></span></div>
       <div class="small">Monthly Gross Profit: <span id="outMonthlyGp" class="ok"></span></div>
       <div class="small">Total Gross Profit: <span id="outTotalGp" class="ok"></span></div>
@@ -623,7 +618,7 @@
         "Hours per Week: " + fmtNumberSmart(x.hours),
         "On Call Bill Rate: " + moneySmart(x.onCallBillRate),
         "Base Margin per Hour: " + moneySmart(x.marginPerHour),
-        "Bonus Deduction: " + moneySmart(x.bonusDeduction || 0),
+        "Extension Bonus Deduction: " + moneySmart(x.bonusDeduction || 0),
         "Adjusted Margin per Hour: " + ((x.assignmentWeeks && x.hours) ? moneySmart((x.totalGpAfterBonus || 0) / (x.hours * x.assignmentWeeks)) : moneySmart(0))
       ]) + "\n" +
 
@@ -809,7 +804,7 @@
     const H = parseFloat(el("hoursPerWeek").value || "0");
     const M = parseFloat(el("marginPerHour").value || "0");
     const onCallBR = parseFloat(el("onCallBillRate").value || "0");
-    const bonusDeduction = parseFloat(el("bonusDeduction").value || "0");
+    const bonusDeduction = Math.max(0, parseFloat(el("extensionBonus").value || "0") || 0);
     const payType = el("payType").value;
 
     const startStr = el("startDate").value || "";
@@ -1044,7 +1039,7 @@ el("contractBlock").value = buildContractInsert({
   });
 
   ["jobId","contractorName","jobTitle","facilityName","facilityCity","facilityState","shift",
-   "billRate","hoursPerWeek","onCallBillRate","bonusDeduction","marginPerHour","roundToFive"].forEach(id => {
+   "billRate","hoursPerWeek","onCallBillRate","extensionBonus","marginPerHour","roundToFive"].forEach(id => {
     const node = el(id);
     if (!node) return;
     node.addEventListener("input", () => calc());
