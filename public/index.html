@@ -25,6 +25,9 @@
 
     label { font-size: 12px; color: #333; }
     input, select, textarea { padding: 8px; font-size: 14px; }
+    input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     textarea { width: 100%; }
 
     .small { font-size: 12px; color: #555; }
@@ -54,6 +57,12 @@
     .spacer8 { height: 8px; }
     .copy-block-spacer { visibility: hidden; pointer-events: none; }
     @media (max-width: 980px) { .copy-block-spacer { display: none; } }
+    .suggestions { display:none; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; background: #fff; max-width: 460px; }
+    .suggestion { display:block; width:100%; padding: 8px; border:0; border-bottom:1px solid #eee; background:#fff; text-align:left; cursor:pointer; }
+    .suggestion:last-child { border-bottom:0; }
+    .suggestion:hover { background:#f4f7fb; }
+    .suggestion .name { font-weight:700; }
+    .suggestion .addr { font-size:12px; color:#555; margin-top:2px; }
 
   </style>
 </head>
@@ -71,12 +80,6 @@
       </div>
 
       <div class="field">
-        <label>Contractor Name</label>
-        <input id="contractorName" type="text" placeholder="Jane Doe">
-        <div class="hint"></div>
-      </div>
-
-      <div class="field">
         <label>Job Title</label>
         <input id="jobTitle" type="text" placeholder="CT Technologist">
         <div class="hint"></div>
@@ -84,21 +87,34 @@
 
       <div class="field">
         <label>Facility</label>
-        <input id="facilityName" type="text" placeholder="Ohio State University Wexner Medical Center">
+        <input id="facilityName" type="text" placeholder="Ohio State University Wexner Medical Center" autocomplete="off">
+        <div id="facilitySuggestions" class="suggestions"></div>
+        <div id="facilityMatchHint" class="hint"></div>
+      </div>
+
+      <div class="field">
+        <label>Facility Street Address</label>
+        <input id="facilityAddress" type="text" placeholder="460 W 10th Ave">
         <div class="hint"></div>
       </div>
 
       <div class="field">
-        <label>State</label>
+        <label>Facility State</label>
         <select id="facilityState"></select>
         <div class="hint"></div>
       </div>
 
       <div class="field">
-        <label>City</label>
+        <label>Facility City</label>
         <input id="facilityCity" type="text" placeholder="Columbus" list="destList">
         <datalist id="destList"></datalist>
         <div id="gsaPicked" class="hint warn">GSA uses City and State. Pick the autocomplete suggestion when possible.</div>
+      </div>
+
+      <div class="field">
+        <label>Facility ZIP</label>
+        <input id="facilityZip" type="text" placeholder="43210">
+        <div class="hint"></div>
       </div>
     </div>
 
@@ -161,6 +177,12 @@
   <div class="box">
     <div class="row">
       <div class="field">
+        <label>Contractor Name</label>
+        <input id="contractorName" type="text" placeholder="Jane Doe">
+        <div class="hint"></div>
+      </div>
+
+      <div class="field">
         <label>Contractor Address Line 1</label>
         <input id="contractorAddress1" type="text" placeholder="123 Main St">
         <div class="hint"></div>
@@ -173,18 +195,6 @@
       </div>
 
       <div class="field">
-        <label>Facility Street Address</label>
-        <input id="facilityAddress" type="text" placeholder="460 W 10th Ave">
-        <div class="hint"></div>
-      </div>
-
-      <div class="field">
-        <label>Facility ZIP</label>
-        <input id="facilityZip" type="text" placeholder="43210">
-        <div class="hint"></div>
-      </div>
-
-      <div class="field">
         <label>Requested Time Off</label>
         <input id="requestedTimeOff" type="text" placeholder="6/13-6/21, 7/9">
         <div class="hint">Leave blank to remove the RTO row from the contract.</div>
@@ -192,7 +202,7 @@
 
       <div class="field">
         <label>Extension Bonus</label>
-        <input id="extensionBonus" type="number" min="0" step="0.01" value="0">
+        <input id="extensionBonus" type="number" min="0" step="1" value="0">
         <div class="hint">0 or blank removes the bonus row and profit deduction.</div>
       </div>
 
@@ -213,7 +223,7 @@
       <div class="row">
         <div class="field">
           <label>Bill Rate (hourly)</label>
-          <input id="billRate" type="number" min="0" step="0.01" value="0">
+          <input id="billRate" type="text" inputmode="decimal" value="0">
           <div class="hint"></div>
         </div>
 
@@ -223,15 +233,21 @@
           <div class="hint"></div>
         </div>
 
+        <div class="field">
+          <label>Taxable Hourly</label>
+          <input id="taxableHourlyOverride" type="number" min="0" step="1" value="30">
+          <div class="hint">Defaults to 30. Change when the taxable floor needs to move.</div>
+        </div>
+
         <div class="field" id="otBillRateField" style="display:none;">
           <label>OT Bill Rate (CA)</label>
-          <input id="otBillRate" type="number" min="0" step="0.01" value="0">
+          <input id="otBillRate" type="number" min="0" step="1" value="0">
           <div class="hint">Enter OT bill rate for CA. Default is base bill rate unless you change it.</div>
         </div>
 
         <div class="field">
           <label>On Call Bill Rate (hourly)</label>
-          <input id="onCallBillRate" type="number" min="0" step="0.01" value="0">
+          <input id="onCallBillRate" type="number" min="0" step="1" value="0">
           <div class="hint"></div>
         </div>
 
@@ -358,6 +374,7 @@
   let uniqueDestByState = new Map();
   let selectedGsa = null;
   let currentPackage = {};
+  let facilitySearchTimer = null;
 
   function norm(s) {
     if (!s) return "";
@@ -384,6 +401,12 @@
   function moneySmart(n) {
     if (!isFinite(n)) return "";
     return "$" + fmtNumberSmart(n);
+  }
+
+  function parseInputNumber(id, fallback) {
+    const raw = String(el(id)?.value || "").replace(/,/g, "").trim();
+    const parsed = parseFloat(raw);
+    return isFinite(parsed) ? parsed : fallback;
   }
 
   function floorDollars(n) {
@@ -711,6 +734,67 @@
     calc();
   }
 
+  async function searchFacilities() {
+    const query = (el("facilityName").value || "").trim();
+    const box = el("facilitySuggestions");
+    if (query.length < 2) {
+      box.style.display = "none";
+      box.innerHTML = "";
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/facilities/search?q=" + encodeURIComponent(query));
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Facility search failed.");
+      renderFacilitySuggestions(data.facilities || []);
+    } catch (_error) {
+      box.style.display = "none";
+    }
+  }
+
+  function renderFacilitySuggestions(facilities) {
+    const box = el("facilitySuggestions");
+    box.innerHTML = "";
+    if (!facilities.length) {
+      box.style.display = "none";
+      return;
+    }
+
+    facilities.forEach((facility) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "suggestion";
+      button.innerHTML =
+        "<div class='name'></div><div class='addr'></div>" +
+        (facility.matchedAlias ? "<div class='addr alias'></div>" : "");
+      button.querySelector(".name").textContent = facility.facilityName;
+      button.querySelector(".addr").textContent = [
+        facility.facilityAddress,
+        [facility.facilityCity, facility.facilityState].filter(Boolean).join(", "),
+        facility.facilityZip
+      ].filter(Boolean).join(" ");
+      const alias = button.querySelector(".alias");
+      if (alias) alias.textContent = "Matched alias: " + facility.matchedAlias;
+      button.addEventListener("click", () => applyFacilitySuggestion(facility));
+      box.appendChild(button);
+    });
+    box.style.display = "block";
+  }
+
+  function applyFacilitySuggestion(facility) {
+    el("facilityName").value = facility.facilityName || "";
+    el("facilityAddress").value = facility.facilityAddress || "";
+    el("facilityCity").value = facility.facilityCity || "";
+    facilityState.value = facility.facilityState || facilityState.value;
+    el("facilityZip").value = facility.facilityZip || "";
+    el("facilitySuggestions").style.display = "none";
+    el("facilityMatchHint").textContent = "Using locked facility address.";
+    el("facilityMatchHint").className = "hint ok";
+    loadDestinationsForState(facilityState.value);
+    calc();
+  }
+
   async function importFromJobDiva() {
     const jobId = (el("jobId").value || "").trim();
     if (!jobId) {
@@ -810,11 +894,12 @@
   function calc() {
     pickBestGsaRow();
 
-    const BR = parseFloat(el("billRate").value || "0");
-    const H = parseFloat(el("hoursPerWeek").value || "0");
-    const M = parseFloat(el("marginPerHour").value || "0");
-    const onCallBR = parseFloat(el("onCallBillRate").value || "0");
-    const bonusDeduction = Math.max(0, parseFloat(el("extensionBonus").value || "0") || 0);
+    const BR = parseInputNumber("billRate", 0);
+    const H = parseInputNumber("hoursPerWeek", 0);
+    const M = parseInputNumber("marginPerHour", 0);
+    const taxableFloorHourly = Math.max(0, parseInputNumber("taxableHourlyOverride", 30));
+    const onCallBR = parseInputNumber("onCallBillRate", 0);
+    const bonusDeduction = Math.max(0, parseInputNumber("extensionBonus", 0) || 0);
     const payType = el("payType").value;
 
     const startStr = el("startDate").value || "";
@@ -845,7 +930,7 @@
     const regHours = hourSplit.regularHours;
     const otHours = hourSplit.otHours;
     const weightedPayHours = regHours + 1.5 * otHours;
-    const otBillInput = parseFloat(el("otBillRate").value || "0");
+    const otBillInput = parseInputNumber("otBillRate", 0);
     const otBill = (stNow === "CA") ? (otBillInput || BR) : BR;
 
     // Show OT Bill Rate field only for CA
@@ -871,7 +956,7 @@
       // taxablePay = baseRate * regularHours + overtimeRate * overtimeHours.
       const denom = weightedPayHours;
 
-      const taxableFloorWeekly = 30 * (denom || 0);
+      const taxableFloorWeekly = taxableFloorHourly * (denom || 0);
       const taxableWeeklyCandidate = weeklyPayBudget - stipendTarget;
 
       if (taxableWeeklyCandidate >= taxableFloorWeekly) {
@@ -881,18 +966,18 @@
         taxableWeekly = taxableFloorWeekly;
         stipendApplied = weeklyPayBudget - taxableFloorWeekly;
         if (stipendApplied < 0) stipendApplied = 0;
-        stipendReducedNote = "Stipend reduced to maintain 30 taxable floor.";
+        stipendReducedNote = "Stipend reduced to maintain " + moneySmart(taxableFloorHourly) + " taxable floor.";
       }
 
       // Base taxable hourly rate
       taxableHourly = (denom > 0) ? (taxableWeekly / denom) : 0;
 
       // Enforce base-rate floor
-      if (taxableHourly < 30 && denom > 0) {
-        taxableHourly = 30;
+      if (taxableHourly < taxableFloorHourly && denom > 0) {
+        taxableHourly = taxableFloorHourly;
         taxableWeekly = taxableHourly * denom;
         stipendApplied = Math.max(0, weeklyPayBudget - taxableWeekly);
-        stipendReducedNote = "Stipend reduced to maintain 30 taxable floor.";
+        stipendReducedNote = "Stipend reduced to maintain " + moneySmart(taxableFloorHourly) + " taxable floor.";
       }
 
       otHourly = taxableHourly * 1.5;
@@ -953,6 +1038,7 @@
       shift: el("shift").value || "",
       billRate: BR,
       hours: H,
+      taxableFloorHourly,
       onCallBillRate: onCallBR,
       lodging, mie,
       stipendTarget,
@@ -1048,15 +1134,35 @@ el("contractBlock").value = buildContractInsert({
     calc();
   });
 
-  ["jobId","contractorName","jobTitle","facilityName","facilityCity","facilityState","shift",
-   "billRate","hoursPerWeek","onCallBillRate","extensionBonus","marginPerHour","roundToFive"].forEach(id => {
+  ["jobId","contractorName","jobTitle","facilityName","facilityAddress","facilityCity","facilityZip","facilityState","shift",
+   "billRate","hoursPerWeek","taxableHourlyOverride","onCallBillRate","extensionBonus","marginPerHour","roundToFive","payFrequency"].forEach(id => {
     const node = el(id);
     if (!node) return;
-    node.addEventListener("input", () => calc());
+    node.addEventListener("input", () => {
+      if (id === "facilityName") {
+        el("facilityMatchHint").textContent = "";
+        clearTimeout(facilitySearchTimer);
+        facilitySearchTimer = setTimeout(searchFacilities, 180);
+      }
+      calc();
+    });
     node.addEventListener("change", () => {
       if (id === "facilityState") loadDestinationsForState(facilityState.value);
       calc();
     });
+  });
+
+  document.addEventListener("wheel", (event) => {
+    if (event.target?.matches?.('input[type="number"]')) {
+      event.preventDefault();
+      event.target.blur();
+    }
+  }, { passive: false });
+
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest("#facilitySuggestions") && event.target.id !== "facilityName") {
+      el("facilitySuggestions").style.display = "none";
+    }
   });
 
   el("marginSlider").addEventListener("input", (e) => {

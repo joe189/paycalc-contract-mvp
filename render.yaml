@@ -7,6 +7,14 @@ services:
     startCommand: npm start
     healthCheckPath: /api/health
     autoDeploy: true
+    disk:
+      name: paycalc-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PAYCALC_DB_PATH
+        value: /var/data/paycalc.sqlite
+      - key: ADMIN_PASSWORD
+        sync: false

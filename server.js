@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -13,6 +14,8 @@ const port = process.env.PORT || 3000;
 const execFileAsync = promisify(execFile);
 
 await loadEnv();
+const db = await openDatabase();
+initDatabase(db);
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -38,11 +41,42 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/facilities/search') {
+      const q = url.searchParams.get('q') || '';
+      return sendJson(res, 200, { facilities: searchFacilities(q) });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/admin/facilities') {
+      if (!isAdminRequest(req)) return sendJson(res, 401, { error: 'Admin password required.' });
+      return sendJson(res, 200, { facilities: listAdminFacilities() });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/admin/facilities/approve') {
+      if (!isAdminRequest(req)) return sendJson(res, 401, { error: 'Admin password required.' });
+      const body = await readJsonBody(req);
+      return sendJson(res, 200, { facility: approveFacility(body || {}) });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/admin/facilities/reject') {
+      if (!isAdminRequest(req)) return sendJson(res, 401, { error: 'Admin password required.' });
+      const body = await readJsonBody(req);
+      rejectFacility(body?.id);
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/admin/facilities/aliases') {
+      if (!isAdminRequest(req)) return sendJson(res, 401, { error: 'Admin password required.' });
+      const body = await readJsonBody(req);
+      return sendJson(res, 200, { aliases: addFacilityAliases(body?.facilityId, body?.aliases || []) });
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/contracts/generate') {
       const body = await readJsonBody(req);
-      const docx = await generateContractDocx(body || {});
+      const facilityResult = saveFacilitySubmission(body || {});
+      const contractPayload = facilityResult.contractPayload || body || {};
+      const docx = await generateContractDocx(contractPayload);
       const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-      const filename = safeFilename(`contract-${body?.jobId || 'draft'}-${timestamp}.docx`);
+      const filename = safeFilename(`contract-${contractPayload?.jobId || 'draft'}-${timestamp}.docx`);
       res.writeHead(200, {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'Content-Disposition': `attachment; filename="${filename}"`,
@@ -86,12 +120,18 @@ async function readJsonBody(req) {
 }
 
 async function serveStatic(urlPath, res) {
-  const safePath = path.normalize(decodeURIComponent(urlPath)).replace(/^(\.\.[/\\])+/, '');
-  const requestedPath = safePath === '/' ? '/index.html' : safePath;
-  const filePath = path.join(__dirname, 'public', requestedPath);
+  const decodedPath = decodeURIComponent(urlPath || '/').replace(/\\/g, '/');
+  const safePath = path.posix.normalize(decodedPath).replace(/^(\.\.\/)+/, '');
+  const requestedPath = safePath === '/'
+    ? '/index.html'
+    : safePath === '/admin/facilities'
+      ? '/admin-facilities.html'
+      : safePath;
+  const relativePath = requestedPath.replace(/^\/+/, '');
+  const filePath = path.join(__dirname, 'public', relativePath);
   const publicRoot = path.join(__dirname, 'public');
 
-  if (!filePath.startsWith(publicRoot)) {
+  if (!filePath.startsWith(publicRoot + path.sep) && filePath !== publicRoot) {
     return sendText(res, 403, 'Forbidden');
   }
 
@@ -120,6 +160,335 @@ function contentType(filePath) {
   if (filePath.endsWith('.js')) return 'text/javascript; charset=utf-8';
   if (filePath.endsWith('.json')) return 'application/json';
   return 'application/octet-stream';
+}
+
+async function openDatabase() {
+  const defaultPath = path.join(__dirname, 'data', 'paycalc.sqlite');
+  const dbPath = process.env.PAYCALC_DB_PATH || defaultPath;
+  await fs.mkdir(path.dirname(dbPath), { recursive: true });
+  const database = new DatabaseSync(dbPath);
+  database.exec('PRAGMA foreign_keys = ON');
+  database.exec('PRAGMA journal_mode = WAL');
+  return database;
+}
+
+function initDatabase(database) {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS facilities (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      canonical_name TEXT NOT NULL,
+      normalized_name TEXT NOT NULL,
+      street TEXT NOT NULL DEFAULT '',
+      city TEXT NOT NULL DEFAULT '',
+      state TEXT NOT NULL DEFAULT '',
+      zip TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending',
+      notes TEXT NOT NULL DEFAULT '',
+      raw_examples TEXT NOT NULL DEFAULT '[]',
+      submission_count INTEGER NOT NULL DEFAULT 0,
+      last_job_id TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      locked_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_facilities_status ON facilities(status);
+    CREATE INDEX IF NOT EXISTS idx_facilities_match ON facilities(normalized_name, city, state);
+
+    CREATE TABLE IF NOT EXISTS facility_aliases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      facility_id INTEGER NOT NULL,
+      alias TEXT NOT NULL,
+      normalized_alias TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (facility_id) REFERENCES facilities(id) ON DELETE CASCADE
+    );
+  `);
+}
+
+function isAdminRequest(req) {
+  const configured = process.env.ADMIN_PASSWORD || '';
+  if (!configured) return true;
+  return req.headers['x-admin-password'] === configured;
+}
+
+function saveFacilitySubmission(payload) {
+  const cleaned = cleanFacilityPayload(payload);
+  const hasFacility = cleaned.facilityName && cleaned.facilityCity && cleaned.facilityState;
+  if (!hasFacility) return { status: 'skipped', contractPayload: { ...payload, ...cleaned } };
+
+  const locked = findLockedFacility(cleaned);
+  if (locked) {
+    return {
+      status: 'matched_locked',
+      facility: locked,
+      contractPayload: { ...payload, ...facilityPayloadFromRecord(locked) },
+    };
+  }
+
+  const pending = findPendingFacility(cleaned);
+  const now = new Date().toISOString();
+  const rawExample = buildRawFacilityExample(payload, cleaned);
+
+  if (pending) {
+    const rawExamples = appendRawExample(pending.raw_examples, rawExample);
+    db.prepare(`
+      UPDATE facilities
+      SET canonical_name = ?, normalized_name = ?, street = ?, city = ?, state = ?, zip = ?,
+          raw_examples = ?, submission_count = submission_count + 1, last_job_id = ?, updated_at = ?
+      WHERE id = ?
+    `).run(
+      cleaned.facilityName,
+      normalizeFacilityName(cleaned.facilityName),
+      cleaned.facilityAddress,
+      cleaned.facilityCity,
+      cleaned.facilityState,
+      cleaned.facilityZip,
+      JSON.stringify(rawExamples),
+      stringOr(payload.jobId, ''),
+      now,
+      pending.id,
+    );
+    return { status: 'updated_pending', contractPayload: { ...payload, ...cleaned } };
+  }
+
+  db.prepare(`
+    INSERT INTO facilities (
+      canonical_name, normalized_name, street, city, state, zip, status, raw_examples,
+      submission_count, last_job_id, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, 1, ?, ?, ?)
+  `).run(
+    cleaned.facilityName,
+    normalizeFacilityName(cleaned.facilityName),
+    cleaned.facilityAddress,
+    cleaned.facilityCity,
+    cleaned.facilityState,
+    cleaned.facilityZip,
+    JSON.stringify([rawExample]),
+    stringOr(payload.jobId, ''),
+    now,
+    now,
+  );
+
+  return { status: 'created_pending', contractPayload: { ...payload, ...cleaned } };
+}
+
+function cleanFacilityPayload(payload) {
+  return {
+    facilityName: cleanFacilityName(payload.facilityName),
+    facilityAddress: cleanStreetAddress(payload.facilityAddress),
+    facilityCity: titleCase(payload.facilityCity),
+    facilityState: cleanState(payload.facilityState),
+    facilityZip: cleanZip(payload.facilityZip),
+  };
+}
+
+function buildRawFacilityExample(payload, cleaned) {
+  return {
+    at: new Date().toISOString(),
+    jobId: stringOr(payload.jobId, ''),
+    rawFacilityName: stringOr(payload.facilityName, ''),
+    rawStreet: stringOr(payload.facilityAddress, ''),
+    rawCity: stringOr(payload.facilityCity, ''),
+    rawState: stringOr(payload.facilityState, ''),
+    rawZip: stringOr(payload.facilityZip, ''),
+    cleaned,
+  };
+}
+
+function appendRawExample(rawJson, example) {
+  const parsed = JSON.parse(rawJson || '[]');
+  parsed.push(example);
+  return parsed.slice(-12);
+}
+
+function findLockedFacility(cleaned) {
+  const normalizedName = normalizeFacilityName(cleaned.facilityName);
+  const alias = db.prepare(`
+    SELECT f.*
+    FROM facility_aliases a
+    JOIN facilities f ON f.id = a.facility_id
+    WHERE f.status = 'locked' AND a.normalized_alias = ?
+    LIMIT 1
+  `).get(normalizedName);
+  if (alias) return alias;
+
+  return db.prepare(`
+    SELECT *
+    FROM facilities
+    WHERE status = 'locked'
+      AND normalized_name = ?
+      AND city = ?
+      AND state = ?
+    LIMIT 1
+  `).get(normalizedName, cleaned.facilityCity, cleaned.facilityState);
+}
+
+function findPendingFacility(cleaned) {
+  return db.prepare(`
+    SELECT *
+    FROM facilities
+    WHERE status = 'pending'
+      AND normalized_name = ?
+      AND city = ?
+      AND state = ?
+    LIMIT 1
+  `).get(normalizeFacilityName(cleaned.facilityName), cleaned.facilityCity, cleaned.facilityState);
+}
+
+function facilityPayloadFromRecord(record) {
+  return {
+    facilityName: record.canonical_name,
+    facilityAddress: record.street,
+    facilityCity: record.city,
+    facilityState: record.state,
+    facilityZip: record.zip,
+  };
+}
+
+function searchFacilities(query) {
+  const q = normalizeFacilityName(query);
+  if (q.length < 2) return [];
+  const like = `%${q}%`;
+  const rows = [
+    ...db.prepare(`
+    SELECT f.*, a.alias AS matched_alias
+    FROM facility_aliases a
+    JOIN facilities f ON f.id = a.facility_id
+    WHERE f.status = 'locked' AND a.normalized_alias LIKE ?
+    ORDER BY f.canonical_name, LENGTH(a.alias)
+    LIMIT 12
+  `).all(like),
+    ...db.prepare(`
+      SELECT f.*, NULL AS matched_alias
+      FROM facilities f
+      WHERE f.status = 'locked' AND f.normalized_name LIKE ?
+      ORDER BY f.canonical_name
+      LIMIT 12
+    `).all(like),
+  ];
+
+  const seen = new Set();
+  return rows.filter((row) => {
+    if (seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  }).slice(0, 12).map((row) => ({
+    id: row.id,
+    facilityName: row.canonical_name,
+    facilityAddress: row.street,
+    facilityCity: row.city,
+    facilityState: row.state,
+    facilityZip: row.zip,
+    matchedAlias: row.matched_alias || '',
+  }));
+}
+
+function listAdminFacilities() {
+  const rows = db.prepare(`
+    SELECT *
+    FROM facilities
+    ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, updated_at DESC
+  `).all();
+
+  const aliasRows = db.prepare('SELECT facility_id, alias FROM facility_aliases ORDER BY alias').all();
+  const aliasMap = new Map();
+  for (const row of aliasRows) {
+    if (!aliasMap.has(row.facility_id)) aliasMap.set(row.facility_id, []);
+    aliasMap.get(row.facility_id).push(row.alias);
+  }
+
+  return rows.map((row) => ({
+    id: row.id,
+    facilityName: row.canonical_name,
+    facilityAddress: row.street,
+    facilityCity: row.city,
+    facilityState: row.state,
+    facilityZip: row.zip,
+    status: row.status,
+    notes: row.notes,
+    aliases: aliasMap.get(row.id) || [],
+    rawExamples: JSON.parse(row.raw_examples || '[]'),
+    submissionCount: row.submission_count,
+    lastJobId: row.last_job_id,
+    updatedAt: row.updated_at,
+    lockedAt: row.locked_at,
+  }));
+}
+
+function approveFacility(input) {
+  const id = Number(input.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error('Facility ID is required.');
+
+  const cleaned = cleanFacilityPayload({
+    facilityName: input.facilityName,
+    facilityAddress: input.facilityAddress,
+    facilityCity: input.facilityCity,
+    facilityState: input.facilityState,
+    facilityZip: input.facilityZip,
+  });
+  if (!cleaned.facilityName || !cleaned.facilityCity || !cleaned.facilityState) {
+    throw new Error('Facility name, city, and state are required.');
+  }
+
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE facilities
+    SET canonical_name = ?, normalized_name = ?, street = ?, city = ?, state = ?, zip = ?,
+        status = 'locked', notes = ?, updated_at = ?, locked_at = COALESCE(locked_at, ?)
+    WHERE id = ?
+  `).run(
+    cleaned.facilityName,
+    normalizeFacilityName(cleaned.facilityName),
+    cleaned.facilityAddress,
+    cleaned.facilityCity,
+    cleaned.facilityState,
+    cleaned.facilityZip,
+    stringOr(input.notes, ''),
+    now,
+    now,
+    id,
+  );
+
+  addFacilityAliases(id, Array.isArray(input.aliases) ? input.aliases : splitAliasText(input.aliases || ''));
+
+  return listAdminFacilities().find((facility) => facility.id === id);
+}
+
+function rejectFacility(idValue) {
+  const id = Number(idValue);
+  if (!Number.isInteger(id) || id <= 0) throw new Error('Facility ID is required.');
+  db.prepare("DELETE FROM facilities WHERE id = ? AND status = 'pending'").run(id);
+}
+
+function addFacilityAliases(facilityIdValue, aliases) {
+  const facilityId = Number(facilityIdValue);
+  if (!Number.isInteger(facilityId) || facilityId <= 0) throw new Error('Facility ID is required.');
+  const now = new Date().toISOString();
+  const values = Array.isArray(aliases) ? aliases : splitAliasText(aliases);
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO facility_aliases (facility_id, alias, normalized_alias, created_at)
+    VALUES (?, ?, ?, ?)
+  `);
+
+  for (const alias of values) {
+    const cleaned = cleanFacilityName(alias);
+    const normalized = normalizeFacilityName(cleaned);
+    if (normalized.length < 2) continue;
+    insert.run(facilityId, cleaned, normalized, now);
+  }
+
+  return db.prepare('SELECT alias FROM facility_aliases WHERE facility_id = ? ORDER BY alias')
+    .all(facilityId)
+    .map((row) => row.alias);
+}
+
+function splitAliasText(value) {
+  return String(value || '')
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 async function generateContractDocx(payload) {
@@ -465,6 +834,111 @@ const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
 function stringOr(value, fallback) {
   const text = String(value ?? '').trim();
   return text || fallback;
+}
+
+function cleanFacilityName(value) {
+  const text = stringOr(value, '');
+  if (!text) return '';
+  const expanded = expandFacilityWords(text);
+  return titleCase(expanded)
+    .replace(/\bOSU\b/gi, 'OSU')
+    .replace(/\bU\.?S\.?A\b/gi, 'USA')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeFacilityName(value) {
+  return expandFacilityWords(value)
+    .toUpperCase()
+    .replace(/&/g, ' AND ')
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .replace(/\bTHE\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function expandFacilityWords(value) {
+  let text = stringOr(value, '');
+  const replacements = [
+    [/\bUNIV\b\.?/gi, 'University'],
+    [/\bCTR\b\.?/gi, 'Center'],
+    [/\bCNTR\b\.?/gi, 'Center'],
+    [/\bMED\b\.?/gi, 'Medical'],
+    [/\bHOSP\b\.?/gi, 'Hospital'],
+    [/\bST\b\.?/gi, 'Saint'],
+  ];
+  for (const [pattern, replacement] of replacements) {
+    text = text.replace(pattern, replacement);
+  }
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function cleanStreetAddress(value) {
+  const text = stringOr(value, '');
+  if (!text) return '';
+  const parts = titleCase(text)
+    .replace(/[.,]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ');
+
+  const suffixes = new Map([
+    ['Street', 'St'],
+    ['St', 'St'],
+    ['St.', 'St'],
+    ['Avenue', 'Ave'],
+    ['Ave', 'Ave'],
+    ['Ave.', 'Ave'],
+    ['Road', 'Rd'],
+    ['Rd', 'Rd'],
+    ['Boulevard', 'Blvd'],
+    ['Blvd', 'Blvd'],
+    ['Drive', 'Dr'],
+    ['Dr', 'Dr'],
+    ['Lane', 'Ln'],
+    ['Ln', 'Ln'],
+    ['Court', 'Ct'],
+    ['Ct', 'Ct'],
+    ['Parkway', 'Pkwy'],
+    ['Pkwy', 'Pkwy'],
+    ['Highway', 'Hwy'],
+    ['Hwy', 'Hwy'],
+    ['Suite', 'Suite'],
+    ['Ste', 'Suite'],
+    ['Unit', 'Unit'],
+  ]);
+  const directions = new Set(['N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW']);
+
+  return parts.map((part) => {
+    const upper = part.toUpperCase();
+    if (directions.has(upper)) return upper;
+    return suffixes.get(part) || part;
+  }).join(' ');
+}
+
+function cleanState(value) {
+  return stringOr(value, '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2);
+}
+
+function cleanZip(value) {
+  const text = stringOr(value, '');
+  const match = text.match(/\d{5}(?:-\d{4})?/);
+  return match ? match[0] : text.replace(/[^\d-]/g, '').slice(0, 10);
+}
+
+function titleCase(value) {
+  return stringOr(value, '')
+    .toLowerCase()
+    .replace(/\b([a-z])/g, (match) => match.toUpperCase())
+    .replace(/\bIi\b/g, 'II')
+    .replace(/\bIii\b/g, 'III')
+    .replace(/\bIv\b/g, 'IV')
+    .replace(/\bNe\b/g, 'NE')
+    .replace(/\bNw\b/g, 'NW')
+    .replace(/\bSe\b/g, 'SE')
+    .replace(/\bSw\b/g, 'SW')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function safeFilename(name) {

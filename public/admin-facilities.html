@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Facility Review</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 18px; max-width: 1200px; }
+    h1 { font-size: 22px; margin: 0 0 12px 0; }
+    h2 { font-size: 16px; margin: 18px 0 8px 0; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+    .field { display: flex; flex-direction: column; gap: 5px; min-width: 180px; }
+    label { font-size: 12px; color: #333; }
+    input, textarea, select { padding: 8px; font-size: 14px; }
+    textarea { min-height: 58px; }
+    .btn { padding: 9px 12px; border: 1px solid #bbb; background: #f7f7f7; border-radius: 6px; cursor: pointer; }
+    .btn.primary { border-color: #0b6b2a; background: #eaf7ee; }
+    .btn.warn { border-color: #8a2d0b; background: #fff3ed; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 10px 0; }
+    .meta { font-size: 12px; color: #555; }
+    .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 12px; background: #eee; }
+    .pill.pending { background: #fff1d6; color: #7a4a00; }
+    .pill.locked { background: #e7f4ea; color: #0b6b2a; }
+    .aliases { font-size: 12px; color: #333; margin-top: 6px; }
+    .status { margin-top: 10px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Facility Review</h1>
+  <div class="row">
+    <div class="field">
+      <label>Admin Password</label>
+      <input id="adminPassword" type="password" autocomplete="current-password">
+    </div>
+    <button class="btn primary" id="loadFacilities" type="button">Load Facilities</button>
+  </div>
+  <div id="status" class="status"></div>
+
+  <h2>Facilities</h2>
+  <div id="facilities"></div>
+
+<script>
+(function () {
+  const el = (id) => document.getElementById(id);
+  let facilities = [];
+
+  function headers() {
+    return {
+      "Content-Type": "application/json",
+      "X-Admin-Password": el("adminPassword").value || ""
+    };
+  }
+
+  function cleanLines(value) {
+    return String(value || "")
+      .split(/[\n,]+/)
+      .map(x => x.trim())
+      .filter(Boolean);
+  }
+
+  async function api(path, options = {}) {
+    const response = await fetch(path, {
+      ...options,
+      headers: { ...headers(), ...(options.headers || {}) }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Request failed.");
+    return data;
+  }
+
+  async function loadFacilities() {
+    el("status").textContent = "Loading...";
+    try {
+      const data = await api("/api/admin/facilities");
+      facilities = data.facilities || [];
+      render();
+      el("status").textContent = "Loaded " + facilities.length + " facilities.";
+    } catch (error) {
+      el("status").textContent = error.message;
+    }
+  }
+
+  function render() {
+    const root = el("facilities");
+    root.innerHTML = "";
+    if (!facilities.length) {
+      root.innerHTML = "<div class='meta'>No facilities yet. Downloading a contract with facility info will create a pending review item.</div>";
+      return;
+    }
+
+    for (const f of facilities) {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.dataset.id = f.id;
+      const rawNames = (f.rawExamples || []).map(x => x.rawFacilityName).filter(Boolean);
+      const suggestedAliases = Array.from(new Set([...rawNames, ...(f.aliases || [])])).join("\\n");
+      card.innerHTML = `
+        <div class="row" style="justify-content:space-between;">
+          <div><b>${escapeHtml(f.facilityName || "Unnamed Facility")}</b></div>
+          <span class="pill ${f.status}">${f.status}</span>
+        </div>
+        <div class="meta">${escapeHtml([f.facilityAddress, f.facilityCity, f.facilityState, f.facilityZip].filter(Boolean).join(", "))}</div>
+        <div class="meta">Submissions: ${f.submissionCount || 0}${f.lastJobId ? " | Last JobID: " + escapeHtml(f.lastJobId) : ""}</div>
+        <div class="row" style="margin-top:10px;">
+          <div class="field"><label>Facility Name</label><input data-field="facilityName" value="${escapeAttr(f.facilityName)}"></div>
+          <div class="field"><label>Street Address</label><input data-field="facilityAddress" value="${escapeAttr(f.facilityAddress)}"></div>
+          <div class="field"><label>City</label><input data-field="facilityCity" value="${escapeAttr(f.facilityCity)}"></div>
+          <div class="field"><label>State</label><input data-field="facilityState" value="${escapeAttr(f.facilityState)}"></div>
+          <div class="field"><label>ZIP</label><input data-field="facilityZip" value="${escapeAttr(f.facilityZip)}"></div>
+        </div>
+        <div class="row" style="margin-top:10px; align-items:flex-start;">
+          <div class="field" style="min-width:320px;"><label>Aliases</label><textarea data-field="aliases">${escapeHtml(suggestedAliases)}</textarea></div>
+          <div class="field" style="min-width:320px;"><label>Notes</label><textarea data-field="notes">${escapeHtml(f.notes || "")}</textarea></div>
+        </div>
+        <div class="aliases">Current aliases: ${escapeHtml((f.aliases || []).join(", ") || "none")}</div>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn primary" data-action="approve" type="button">Approve & Lock</button>
+          <button class="btn" data-action="aliases" type="button">Save Aliases</button>
+          ${f.status === "pending" ? '<button class="btn warn" data-action="reject" type="button">Reject Pending</button>' : ""}
+        </div>
+      `;
+      root.appendChild(card);
+    }
+  }
+
+  function cardPayload(card) {
+    const value = (field) => card.querySelector(`[data-field="${field}"]`)?.value || "";
+    return {
+      id: Number(card.dataset.id),
+      facilityName: value("facilityName"),
+      facilityAddress: value("facilityAddress"),
+      facilityCity: value("facilityCity"),
+      facilityState: value("facilityState"),
+      facilityZip: value("facilityZip"),
+      aliases: cleanLines(value("aliases")),
+      notes: value("notes")
+    };
+  }
+
+  el("facilities").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+    const card = button.closest(".card");
+    const payload = cardPayload(card);
+    try {
+      if (button.dataset.action === "approve") {
+        await api("/api/admin/facilities/approve", { method: "POST", body: JSON.stringify(payload) });
+        el("status").textContent = "Approved and locked.";
+      }
+      if (button.dataset.action === "aliases") {
+        await api("/api/admin/facilities/aliases", {
+          method: "POST",
+          body: JSON.stringify({ facilityId: payload.id, aliases: payload.aliases })
+        });
+        el("status").textContent = "Aliases saved.";
+      }
+      if (button.dataset.action === "reject") {
+        await api("/api/admin/facilities/reject", { method: "POST", body: JSON.stringify({ id: payload.id }) });
+        el("status").textContent = "Pending facility rejected.";
+      }
+      await loadFacilities();
+    } catch (error) {
+      el("status").textContent = error.message;
+    }
+  });
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function escapeAttr(value) {
+    return escapeHtml(value).replace(/"/g, "&quot;");
+  }
+
+  el("loadFacilities").addEventListener("click", loadFacilities);
+})();
+</script>
+</body>
+</html>

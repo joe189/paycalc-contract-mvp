@@ -36,6 +36,21 @@ This repo includes a `render.yaml` blueprint for a simple live web service.
 
 For the manual MVP, no environment variables are required. To connect real JobDiva data later, add `JOBDIVA_LOOKUP_URL` and optionally `JOBDIVA_API_TOKEN` in the Render service environment.
 
+For facility review/approval, set:
+
+```bash
+ADMIN_PASSWORD=your-admin-password
+PAYCALC_DB_PATH=/var/data/paycalc.sqlite
+```
+
+The Render blueprint mounts `/var/data` for the SQLite facility database. The admin review page is:
+
+```text
+/admin/facilities
+```
+
+Downloading a contract automatically submits the facility address for review. Locked facilities are used for autocomplete and are not overwritten by later contract downloads.
+
 ## JobDiva Lookup
 
 The app works without JobDiva credentials by returning demo data for the import button.
