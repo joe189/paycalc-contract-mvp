@@ -200,7 +200,14 @@ function contractValues(payload) {
     holidayRate: `${money(payload.otHourly)}/hr`,
     requestedTimeOff: stringOr(payload.requestedTimeOff, ''),
     extensionBonus: optionalMoney(payload.extensionBonus),
+    payScheduleFrequency: payScheduleFrequencyText(payload.payFrequency),
   };
+}
+
+function payScheduleFrequencyText(value) {
+  return String(value || '').toUpperCase() === 'WEEKLY'
+    ? 'weekly.'
+    : 'biweekly (every other Friday) in accordance with Trailblazer payroll schedule.';
 }
 
 function transformContractXml(xml, values) {
@@ -231,19 +238,39 @@ function replaceTemplateParagraphs(xml, values) {
 
 function replacePlaceholdersInParagraph(paragraph, values) {
   const textMatches = [...paragraph.matchAll(/<w:t(\s[^>]*)?>([\s\S]*?)<\/w:t>/g)];
-  const nextTexts = textMatches.map((match) => match[2]);
+  const nextTexts = textMatches.map((match) => unescapeXml(match[2]));
+  const fullText = nextTexts.join('');
+  const ranges = [];
+  let cursor = 0;
 
   for (let i = 0; i < nextTexts.length; i += 1) {
-    if (!nextTexts[i].includes('{{')) continue;
-    for (let j = i; j < nextTexts.length; j += 1) {
-      const joined = nextTexts.slice(i, j + 1).join('');
-      const match = joined.match(/^\{\{\s*([A-Za-z0-9_]+)\s*\}\}$/);
-      if (!match) continue;
-      nextTexts[i] = values[match[1]] == null ? '' : String(values[match[1]]);
-      for (let k = i + 1; k <= j; k += 1) nextTexts[k] = '';
-      i = j;
-      break;
+    ranges.push({ start: cursor, end: cursor + nextTexts[i].length });
+    cursor += nextTexts[i].length;
+  }
+
+  const placeholders = [...fullText.matchAll(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g)].reverse();
+  for (const placeholder of placeholders) {
+    const start = placeholder.index;
+    const end = start + placeholder[0].length;
+    const startPosition = findTextPosition(ranges, start);
+    const endPosition = findTextPosition(ranges, end - 1);
+    if (!startPosition || !endPosition) continue;
+
+    const value = values[placeholder[1]] == null ? '' : String(values[placeholder[1]]);
+    const startText = nextTexts[startPosition.index];
+    const endText = nextTexts[endPosition.index];
+
+    if (startPosition.index === endPosition.index) {
+      nextTexts[startPosition.index] =
+        startText.slice(0, startPosition.offset) + value + startText.slice(endPosition.offset + 1);
+      continue;
     }
+
+    nextTexts[startPosition.index] = startText.slice(0, startPosition.offset) + value;
+    for (let i = startPosition.index + 1; i < endPosition.index; i += 1) {
+      nextTexts[i] = '';
+    }
+    nextTexts[endPosition.index] = endText.slice(endPosition.offset + 1);
   }
 
   let textIndex = 0;
@@ -252,6 +279,16 @@ function replacePlaceholdersInParagraph(paragraph, values) {
     textIndex += 1;
     return `<w:t${attrs}>${escapeXml(value)}</w:t>`;
   });
+}
+
+function findTextPosition(ranges, absoluteIndex) {
+  for (let i = 0; i < ranges.length; i += 1) {
+    const range = ranges[i];
+    if (absoluteIndex >= range.start && absoluteIndex < range.end) {
+      return { index: i, offset: absoluteIndex - range.start };
+    }
+  }
+  return null;
 }
 
 function replaceParagraphByPrefix(xml, prefix, replacement) {

@@ -195,6 +195,15 @@
         <input id="extensionBonus" type="number" min="0" step="0.01" value="0">
         <div class="hint">0 or blank removes the bonus row and profit deduction.</div>
       </div>
+
+      <div class="field">
+        <label>Pay Frequency</label>
+        <select id="payFrequency">
+          <option value="BIWEEKLY" selected>Biweekly</option>
+          <option value="WEEKLY">Weekly</option>
+        </select>
+        <div class="hint">Controls the Pay Schedule wording in the Word contract.</div>
+      </div>
     </div>
   </div>
 
@@ -747,7 +756,8 @@
       facilityAddress: el("facilityAddress").value || "",
       facilityZip: el("facilityZip").value || "",
       requestedTimeOff: el("requestedTimeOff").value || "",
-      extensionBonus: el("extensionBonus").value || ""
+      extensionBonus: el("extensionBonus").value || "",
+      payFrequency: el("payFrequency").value || "BIWEEKLY"
     };
   }
 
