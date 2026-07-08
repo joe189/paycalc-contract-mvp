@@ -575,8 +575,8 @@ function contractValues(payload) {
 
 function payScheduleFrequencyText(value) {
   return String(value || '').toUpperCase() === 'WEEKLY'
-    ? 'weekly.'
-    : 'biweekly (every other Friday) in accordance with Trailblazer payroll schedule.';
+    ? 'weekly'
+    : 'biweekly (every other Friday) in accordance with Trailblazer payroll schedule';
 }
 
 function transformContractXml(xml, values) {
