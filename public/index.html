@@ -517,6 +517,56 @@
     return 40;
   }
 
+  function splitWeeklyHours(hoursPerWeek) {
+    const total = Math.max(0, hoursPerWeek || 0);
+    return {
+      regularHours: Math.min(40, total),
+      otHours: Math.max(0, total - 40),
+      dtHours: 0,
+      totalHours: total,
+    };
+  }
+
+  function parseSchedulePattern(scheduleValue) {
+    const match = String(scheduleValue || "").trim().match(/^(\d+)\s*x\s*(\d+(?:\.\d+)?)$/i);
+    if (!match) return null;
+    const days = parseInt(match[1], 10);
+    const shiftHours = parseFloat(match[2]);
+    if (!isFinite(days) || !isFinite(shiftHours) || days <= 0 || shiftHours <= 0) return null;
+    return { days, shiftHours, weeklyHours: days * shiftHours };
+  }
+
+  function splitCaliforniaHours(scheduleValue, hoursPerWeek) {
+    const total = Math.max(0, hoursPerWeek || 0);
+    const parsed = parseSchedulePattern(scheduleValue);
+    if (!parsed || !parsed.weeklyHours) return splitWeeklyHours(total);
+
+    const scale = total / parsed.weeklyHours;
+    let regularHours = 0;
+    let otHours = 0;
+    let dtHours = 0;
+
+    for (let day = 0; day < parsed.days; day++) {
+      const dayHours = parsed.shiftHours * scale;
+      regularHours += Math.min(dayHours, 8);
+      otHours += Math.max(Math.min(dayHours - 8, 4), 0);
+      dtHours += Math.max(dayHours - 12, 0);
+    }
+
+    if (regularHours > 40) {
+      otHours += regularHours - 40;
+      regularHours = 40;
+    }
+
+    return { regularHours, otHours, dtHours, totalHours: total };
+  }
+
+  function splitPayHours(state, schedule, hoursPerWeek) {
+    return state === "CA"
+      ? splitCaliforniaHours(schedule, hoursPerWeek)
+      : splitWeeklyHours(hoursPerWeek);
+  }
+
   function parseCsv(text) {
     const rows = [];
     let i = 0, field = "", row = [], inQuotes = false;
@@ -920,49 +970,24 @@
     const gsaWeeklyMax = (lodging + mie) * 7;
     const stipendTarget = Math.max(0, gsaWeeklyMax - 20);
 
-    // Split regular and overtime hours. California generally requires overtime
-    // after 8 hours in a workday as well as after 40 hours in a workweek.
     const stNow = (facilityState.value || "").toUpperCase();
-
-    function splitOvertimeHours(hoursPerWeek, schedule, state) {
-      const total = Math.max(0, hoursPerWeek || 0);
-      const weeklyOtHours = Math.max(0, total - 40);
-      let otHours = weeklyOtHours;
-
-      if (state === "CA") {
-        const match = String(schedule || "").trim().match(/^(\d+)x(\d+(?:\.\d+)?)$/i);
-        if (match) {
-          const scheduledDays = Math.max(0, Number(match[1]) || 0);
-          const scheduledHoursPerDay = Math.max(0, Number(match[2]) || 0);
-          const scheduledTotal = scheduledDays * scheduledHoursPerDay;
-          const dailyOtAtSchedule = scheduledDays * Math.max(0, scheduledHoursPerDay - 8);
-          const dailyOtHours = scheduledTotal > 0
-            ? dailyOtAtSchedule * Math.min(1, total / scheduledTotal)
-            : 0;
-
-          // Daily and weekly thresholds identify overtime hours; the same hour
-          // must not be counted twice when both thresholds apply.
-          otHours = Math.max(dailyOtHours, weeklyOtHours);
-        }
-      }
-
-      otHours = Math.min(total, otHours);
-      const regularHours = total - otHours;
-      return { regularHours, otHours, totalHours: total };
-    }
-
-    const hourSplit = splitOvertimeHours(H, el("schedule").value, stNow);
+    const hourSplit = splitPayHours(stNow, el("schedule").value, H);
     const regHours = hourSplit.regularHours;
     const otHours = hourSplit.otHours;
-    const weightedPayHours = regHours + 1.5 * otHours;
+    const dtHours = hourSplit.dtHours || 0;
+    const weightedPayHours = regHours + 1.5 * otHours + 2 * dtHours;
     const otBillInput = parseInputNumber("otBillRate", 0);
     const otBill = (stNow === "CA") ? (otBillInput || BR) : BR;
+    const dtBill = BR * 2;
 
     // Show OT Bill Rate field only for CA
     el("otBillRateField").style.display = (stNow === "CA") ? "block" : "none";
     if (stNow === "CA" && (!otBillInput) && BR > 0) el("otBillRate").value = String(Math.round(BR * 100) / 100);
 
-    const weeklyPayBudget = (BR - M) * H;
+    const weeklyRevenue = (stNow === "CA")
+      ? (BR * regHours + otBill * otHours + dtBill * dtHours)
+      : (BR * H);
+    const weeklyPayBudget = Math.max(0, weeklyRevenue - (M * H));
 
     let stipendApplied = 0;
     let taxableWeekly = 0;
@@ -1020,8 +1045,13 @@
       otHourly = taxableHourly * 1.5;
     }
 
-    const weeklyRevenue = (stNow === "CA") ? (BR * regHours + otBill * otHours) : (BR * H);
-    const weeklyGp = weeklyRevenue - weeklyGross;
+    const dtHourly = taxableHourly * 2;
+    const regularGp = M * regHours;
+    const otGp = (otBill - otHourly) * otHours;
+    const dtGp = (dtBill - dtHourly) * dtHours;
+    const weeklyGp = (stNow === "CA")
+      ? (regularGp + otGp + dtGp)
+      : (weeklyRevenue - weeklyGross);
     const monthlyGp = weeklyGp * 4.33;
     const totalGp = weeklyGp * (assignmentWeeks || 0);
     const totalGpAfterBonus = totalGp - bonusDeduction;
