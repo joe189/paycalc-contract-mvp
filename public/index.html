@@ -74,7 +74,7 @@
   <h2>Assignment details</h2>
   <div class="box">
     <div class="row">
-      <div class="field">
+      <div class="field" hidden>
         <label>JobID</label>
         <input id="jobId" type="text" placeholder="12345">
         <div class="hint"><button class="btn" id="importJobDiva" type="button">Import from JobDiva</button></div>
@@ -109,7 +109,7 @@
         <label>Facility City</label>
         <input id="facilityCity" type="text" placeholder="Columbus" list="destList">
         <datalist id="destList"></datalist>
-        <div id="gsaPicked" class="hint warn">GSA uses City and State. Pick the autocomplete suggestion when possible.</div>
+        <div id="gsaPicked" class="hint warn">Select matching city from autocomplete/dropdown.</div>
       </div>
 
       <div class="field">
@@ -611,7 +611,7 @@
 
     if (!matches.length) {
       selectedGsa = { lodging: CONUS.lodging, mie: CONUS.mie, dest: "STANDARD", state: "CONUS" };
-      gsaPicked.textContent = "No exact city match in GSA for this state. Using standard CONUS fallback. Pick from autocomplete for best results.";
+      gsaPicked.textContent = "Select matching city from autocomplete/dropdown.";
       gsaPicked.className = "hint warn";
       return;
     }
