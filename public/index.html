@@ -14,8 +14,6 @@
     @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
 
     .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
-    [hidden] { display: none !important; }
-
     .field {
       display: flex;
       flex-direction: column;
@@ -29,9 +27,9 @@
     input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
     input[type="number"]::-webkit-outer-spin-button,
     input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-    #marginPerHour { appearance: auto; -moz-appearance: auto; }
-    #marginPerHour::-webkit-outer-spin-button,
-    #marginPerHour::-webkit-inner-spin-button { -webkit-appearance: auto; margin: initial; opacity: 1; }
+    input[type="number"].has-stepper { appearance: auto; -moz-appearance: auto; }
+    input[type="number"].has-stepper::-webkit-outer-spin-button,
+    input[type="number"].has-stepper::-webkit-inner-spin-button { -webkit-appearance: auto; margin: initial; opacity: 1; }
     textarea { width: 100%; }
 
     .small { font-size: 12px; color: #555; }
@@ -77,13 +75,9 @@
 
   <h2>Assignment details</h2>
   <div class="box">
-    <div class="row">
-      <div class="field" hidden>
-        <label>JobID</label>
-        <input id="jobId" type="text" placeholder="12345">
-        <div class="hint"><button class="btn" id="importJobDiva" type="button">Import from JobDiva</button></div>
-      </div>
+    <input id="jobId" type="hidden" value="">
 
+    <div class="row">
       <div class="field">
         <label>Job Title</label>
         <input id="jobTitle" type="text" placeholder="CT Technologist">
@@ -154,7 +148,9 @@
         </select>
         <div class="hint">Schedule sets Hours per Week automatically.</div>
       </div>
+    </div>
 
+    <div class="row" style="margin-top:10px;">
       <div class="field">
         <label>Shift</label>
         <select id="shift">
@@ -165,6 +161,12 @@
           <option value="Variable">Variable</option>
           <option value="Other">Other</option>
         </select>
+        <div class="hint"></div>
+      </div>
+
+      <div class="field">
+        <label>Hours per Week</label>
+        <input id="hoursPerWeek" type="number" min="0" step="1" value="40">
         <div class="hint"></div>
       </div>
 
@@ -235,12 +237,6 @@
         </div>
 
         <div class="field">
-          <label>Hours per Week</label>
-          <input id="hoursPerWeek" type="number" min="0" step="1" value="40">
-          <div class="hint"></div>
-        </div>
-
-        <div class="field">
           <label>Taxable Hourly</label>
           <input id="taxableHourlyOverride" type="number" min="0" step="1" value="30">
           <div class="hint">Defaults to 30. Change when the taxable floor needs to move.</div>
@@ -263,7 +259,7 @@
       <div class="row" style="margin-top:10px;">
         <div class="field" style="min-width:360px;">
           <label>Margin per Hour (default 22)</label>
-          <input id="marginPerHour" type="number" min="0" step="1" value="22">
+          <input id="marginPerHour" class="has-stepper" type="number" min="0" step="1" value="22">
           <input id="marginSlider" type="range" min="0" max="60" step="1" value="22">
           <div class="hint"></div>
         </div>
@@ -759,38 +755,6 @@
     );
   }
 
-  function fillFieldsFromJobDiva(job) {
-    const pairs = {
-      contractorName: job.contractorName,
-      jobTitle: job.jobTitle || job.title,
-      facilityName: job.facilityName || job.facility,
-      facilityCity: job.facilityCity || job.city,
-      facilityState: job.facilityState || job.state,
-      startDate: job.startDate,
-      endDate: job.endDate,
-      schedule: job.schedule,
-      shift: job.shift,
-      billRate: job.billRate,
-      hoursPerWeek: job.hoursPerWeek,
-      onCallBillRate: job.onCallBillRate,
-      contractorAddress1: job.contractorAddress1,
-      contractorAddress2: job.contractorAddress2,
-      facilityAddress: job.facilityAddress,
-      facilityZip: job.facilityZip,
-      requestedTimeOff: job.requestedTimeOff,
-      extensionBonus: job.extensionBonus
-    };
-
-    Object.entries(pairs).forEach(([id, value]) => {
-      if (value == null || value === "" || !el(id)) return;
-      el(id).value = value;
-    });
-
-    if (job.payType === "LOCAL" || job.payType === "TRAVEL") setTab(job.payType);
-    loadDestinationsForState(facilityState.value);
-    calc();
-  }
-
   async function searchFacilities() {
     const query = (el("facilityName").value || "").trim();
     const box = el("facilitySuggestions");
@@ -850,27 +814,6 @@
     el("facilityMatchHint").className = "hint ok";
     loadDestinationsForState(facilityState.value);
     calc();
-  }
-
-  async function importFromJobDiva() {
-    const jobId = (el("jobId").value || "").trim();
-    if (!jobId) {
-      el("emailStatus").textContent = "Enter a JobID first.";
-      return;
-    }
-
-    el("emailStatus").textContent = "Importing JobDiva data...";
-    try {
-      const response = await fetch("/api/jobdiva/jobs/" + encodeURIComponent(jobId));
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "JobDiva import failed.");
-      fillFieldsFromJobDiva(data.job || {});
-      el("emailStatus").textContent = data.source === "demo"
-        ? "Loaded demo JobDiva data. Add JOBDIVA_LOOKUP_URL to connect the real source."
-        : "Loaded JobDiva data.";
-    } catch (error) {
-      el("emailStatus").textContent = error.message;
-    }
   }
 
   function buildContractPayload() {
@@ -1192,7 +1135,7 @@ el("contractBlock").value = buildContractInsert({
     calc();
   });
 
-  ["jobId","contractorName","jobTitle","facilityName","facilityAddress","facilityCity","facilityZip","facilityState","shift",
+  ["contractorName","jobTitle","facilityName","facilityAddress","facilityCity","facilityZip","facilityState","shift",
    "billRate","hoursPerWeek","taxableHourlyOverride","onCallBillRate","extensionBonus","marginPerHour","roundToFive","payFrequency"].forEach(id => {
     const node = el(id);
     if (!node) return;
@@ -1236,7 +1179,6 @@ el("contractBlock").value = buildContractInsert({
 
   attachCopy("copyApproval", "approvalBlock");
   attachCopy("copyContract", "contractBlock");
-  el("importJobDiva").addEventListener("click", importFromJobDiva);
   el("downloadWordContract").addEventListener("click", downloadWordContract);
 
   el("openApprovalEmail").addEventListener("click", () => {
