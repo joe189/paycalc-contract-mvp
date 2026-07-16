@@ -24,12 +24,6 @@
 
     label { font-size: 12px; color: #333; }
     input, select, textarea { padding: 8px; font-size: 14px; }
-    input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
-    input[type="number"]::-webkit-outer-spin-button,
-    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-    input[type="number"].has-stepper { appearance: auto; -moz-appearance: auto; }
-    input[type="number"].has-stepper::-webkit-outer-spin-button,
-    input[type="number"].has-stepper::-webkit-inner-spin-button { -webkit-appearance: auto; margin: initial; opacity: 1; }
     textarea { width: 100%; }
 
     .small { font-size: 12px; color: #555; }
@@ -211,7 +205,7 @@
 
       <div class="field">
         <label>Extension Bonus</label>
-        <input id="extensionBonus" type="number" min="0" step="1" value="0">
+        <input id="extensionBonus" type="text" inputmode="decimal" value="0">
         <div class="hint">0 or blank removes the bonus row and profit deduction.</div>
       </div>
 
@@ -244,13 +238,13 @@
 
         <div class="field" id="otBillRateField" style="display:none;">
           <label>OT Bill Rate (CA)</label>
-          <input id="otBillRate" type="number" min="0" step="1" value="0">
+          <input id="otBillRate" type="text" inputmode="decimal" value="0">
           <div class="hint">Enter OT bill rate for CA. Default is base bill rate unless you change it.</div>
         </div>
 
         <div class="field">
           <label>On Call Bill Rate (hourly)</label>
-          <input id="onCallBillRate" type="number" min="0" step="1" value="0">
+          <input id="onCallBillRate" type="text" inputmode="decimal" value="0">
           <div class="hint"></div>
         </div>
 
@@ -259,7 +253,7 @@
       <div class="row" style="margin-top:10px;">
         <div class="field" style="min-width:360px;">
           <label>Margin per Hour (default 22)</label>
-          <input id="marginPerHour" class="has-stepper" type="number" min="0" step="1" value="22">
+          <input id="marginPerHour" type="number" min="0" step="1" value="22">
           <input id="marginSlider" type="range" min="0" max="60" step="1" value="22">
           <div class="hint"></div>
         </div>
