@@ -917,17 +917,38 @@
     const gsaWeeklyMax = (lodging + mie) * 7;
     const stipendTarget = Math.max(0, gsaWeeklyMax - 20);
 
-    // Weekly overtime split: anything over 40 hours is paid at overtime.
+    // Split regular and overtime hours. California generally requires overtime
+    // after 8 hours in a workday as well as after 40 hours in a workweek.
     const stNow = (facilityState.value || "").toUpperCase();
 
-    function splitWeeklyOvertime(hoursPerWeek) {
+    function splitOvertimeHours(hoursPerWeek, schedule, state) {
       const total = Math.max(0, hoursPerWeek || 0);
-      const regularHours = Math.min(40, total);
-      const otHours = Math.max(0, total - 40);
+      const weeklyOtHours = Math.max(0, total - 40);
+      let otHours = weeklyOtHours;
+
+      if (state === "CA") {
+        const match = String(schedule || "").trim().match(/^(\d+)x(\d+(?:\.\d+)?)$/i);
+        if (match) {
+          const scheduledDays = Math.max(0, Number(match[1]) || 0);
+          const scheduledHoursPerDay = Math.max(0, Number(match[2]) || 0);
+          const scheduledTotal = scheduledDays * scheduledHoursPerDay;
+          const dailyOtAtSchedule = scheduledDays * Math.max(0, scheduledHoursPerDay - 8);
+          const dailyOtHours = scheduledTotal > 0
+            ? dailyOtAtSchedule * Math.min(1, total / scheduledTotal)
+            : 0;
+
+          // Daily and weekly thresholds identify overtime hours; the same hour
+          // must not be counted twice when both thresholds apply.
+          otHours = Math.max(dailyOtHours, weeklyOtHours);
+        }
+      }
+
+      otHours = Math.min(total, otHours);
+      const regularHours = total - otHours;
       return { regularHours, otHours, totalHours: total };
     }
 
-    const hourSplit = splitWeeklyOvertime(H);
+    const hourSplit = splitOvertimeHours(H, el("schedule").value, stNow);
     const regHours = hourSplit.regularHours;
     const otHours = hourSplit.otHours;
     const weightedPayHours = regHours + 1.5 * otHours;

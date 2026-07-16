@@ -840,11 +840,36 @@ function cleanFacilityName(value) {
   const text = stringOr(value, '');
   if (!text) return '';
   const expanded = expandFacilityWords(text);
-  return titleCase(expanded)
-    .replace(/\bOSU\b/gi, 'OSU')
-    .replace(/\bU\.?S\.?A\b/gi, 'USA')
+  return formatFacilityName(expanded)
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+const FACILITY_ACRONYMS = new Set([
+  'UC', 'UCF', 'UCLA', 'UCSF', 'USC',
+  'OSU', 'NYU', 'LSU', 'UAB', 'UNC', 'UT', 'UVA', 'VCU',
+  'UPMC', 'UMC', 'HCA', 'CHI', 'CHS', 'VA', 'USA',
+  'N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW',
+]);
+
+function formatFacilityName(value) {
+  const text = stringOr(value, '');
+  const hasMixedCase = /[a-z]/.test(text) && /[A-Z]/.test(text);
+
+  return text.split(/(\s+)/).map((token) => {
+    if (!token.trim()) return token;
+
+    const normalized = token.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (FACILITY_ACRONYMS.has(normalized)) return normalized;
+
+    // Preserve clearly intentional short acronyms from already mixed-case
+    // names without treating every word in an all-caps import as an acronym.
+    if (hasMixedCase && /^[A-Z][A-Z0-9&.-]{1,5}$/.test(token)) {
+      return token.toUpperCase();
+    }
+
+    return titleCase(token);
+  }).join('');
 }
 
 function normalizeFacilityName(value) {
