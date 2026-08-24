@@ -922,6 +922,15 @@
     };
   }
 
+  function buildContractFileName(contractorName) {
+    const cleanName = String(contractorName || "")
+      .trim()
+      .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "")
+      .replace(/\s+/g, " ")
+      .replace(/[. ]+$/g, "");
+    return (cleanName || "Contractor") + " Contract.docx";
+  }
+
   async function downloadWordContract() {
     el("contractStatus").textContent = "Generating Word contract...";
     try {
@@ -941,9 +950,8 @@
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      const jobId = payload.jobId || "draft";
       a.href = url;
-      a.download = "contract-" + jobId + ".docx";
+      a.download = buildContractFileName(payload.contractorName);
       document.body.appendChild(a);
       a.click();
       a.remove();

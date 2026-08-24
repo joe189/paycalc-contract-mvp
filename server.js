@@ -75,11 +75,11 @@ const server = http.createServer(async (req, res) => {
       const facilityResult = await saveFacilitySubmission(body || {});
       const contractPayload = facilityResult.contractPayload || body || {};
       const docx = await generateContractDocx(contractPayload);
-      const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-      const filename = safeFilename(`contract-${contractPayload?.jobId || 'draft'}-${timestamp}.docx`);
+      const filename = buildContractFilename(contractPayload?.contractorName);
+      const asciiFilename = filename.normalize('NFKD').replace(/[^\x20-\x7E]/g, '').replace(/["\\]/g, '');
       res.writeHead(200, {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
         'Cache-Control': 'no-store, max-age=0',
         Pragma: 'no-cache',
         Expires: '0',
@@ -1074,8 +1074,13 @@ function titleCase(value) {
     .trim();
 }
 
-function safeFilename(name) {
-  return String(name || 'contract.docx').replace(/[^a-z0-9._-]+/gi, '-');
+function buildContractFilename(contractorName) {
+  const cleanName = String(contractorName || '')
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/[. ]+$/g, '');
+  return `${cleanName || 'Contractor'} Contract.docx`;
 }
 
 function money(value) {
