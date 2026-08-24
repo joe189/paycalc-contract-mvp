@@ -562,7 +562,7 @@ function contractValues(payload) {
     weeklyGross: money(payload.weeklyGross),
     taxableHourly: `${money(payload.taxableHourly)}/hr`,
     stipend: money(payload.stipendApplied),
-    chargeRate: `${money(payload.taxableHourly)}/hr`,
+    chargeRate: `${money(Number(payload.taxableHourly) + 2)}/hr`,
     onCallPay: `${money(payload.onCallPay)}/hr`,
     callBackRate: `${money(payload.otHourly)}/hr`,
     overtimeRate: `${money(payload.otHourly)}/hr`,
