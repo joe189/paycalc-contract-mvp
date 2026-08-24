@@ -43,7 +43,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/api/facilities/search') {
       const q = url.searchParams.get('q') || '';
-      return sendJson(res, 200, { facilities: searchFacilities(q) });
+      return sendJson(res, 200, { facilities: await searchFacilitiesForRequest(q) });
     }
 
     if (req.method === 'GET' && url.pathname === '/api/admin/facilities') {
@@ -72,7 +72,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/api/contracts/generate') {
       const body = await readJsonBody(req);
-      const facilityResult = saveFacilitySubmission(body || {});
+      const facilityResult = await saveFacilitySubmission(body || {});
       const contractPayload = facilityResult.contractPayload || body || {};
       const docx = await generateContractDocx(contractPayload);
       const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
@@ -212,7 +212,14 @@ function isAdminRequest(req) {
   return req.headers['x-admin-password'] === configured;
 }
 
-function saveFacilitySubmission(payload) {
+async function saveFacilitySubmission(payload) {
+  if (isHubFacilitySyncConfigured()) {
+    return submitFacilityToHub(payload);
+  }
+  return saveFacilitySubmissionLocally(payload);
+}
+
+function saveFacilitySubmissionLocally(payload) {
   const cleaned = cleanFacilityPayload(payload);
   const hasFacility = cleaned.facilityName && cleaned.facilityCity && cleaned.facilityState;
   if (!hasFacility) return { status: 'skipped', contractPayload: { ...payload, ...cleaned } };
@@ -383,6 +390,107 @@ function searchFacilities(query) {
     facilityZip: row.zip,
     matchedAlias: row.matched_alias || '',
   }));
+}
+
+async function searchFacilitiesForRequest(query) {
+  if (!isHubFacilitySyncConfigured()) return searchFacilities(query);
+
+  const normalizedQuery = String(query || '').trim();
+  if (normalizedQuery.length < 2) return [];
+
+  const data = await fetchHubFacilityJson(`/api/facilities/search?q=${encodeURIComponent(normalizedQuery)}`);
+  return (Array.isArray(data?.facilities) ? data.facilities : []).map(mapHubFacility);
+}
+
+async function submitFacilityToHub(payload) {
+  const cleaned = cleanFacilityPayload(payload);
+  const hasFacility = cleaned.facilityName && cleaned.facilityCity && cleaned.facilityState;
+  const fallbackResult = { status: 'skipped', contractPayload: { ...payload, ...cleaned } };
+  if (!hasFacility) return fallbackResult;
+
+  try {
+    const result = await fetchHubFacilityJson('/api/facilities/submit', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: cleaned.facilityName,
+        addressLine1: cleaned.facilityAddress,
+        addressLine2: stringOr(payload.facilityAddress2, ''),
+        city: cleaned.facilityCity,
+        state: cleaned.facilityState,
+        postalCode: cleaned.facilityZip,
+        source: 'contract_generator',
+        sourceReference: stringOr(payload.jobId, ''),
+      }),
+    });
+
+    const matchedFacility = result?.status === 'matched' && result?.facility
+      ? mapHubFacility(result.facility)
+      : null;
+    return {
+      status: result?.status || 'submitted',
+      facility: matchedFacility,
+      contractPayload: matchedFacility
+        ? { ...payload, ...facilityPayloadFromApi(matchedFacility) }
+        : fallbackResult.contractPayload,
+    };
+  } catch (error) {
+    console.warn(`Facility submission to StaffStack Hub failed: ${error?.message || 'Unknown error'}`);
+    return { ...fallbackResult, status: 'hub_error' };
+  }
+}
+
+function mapHubFacility(facility) {
+  return {
+    id: facility?.id || '',
+    facilityName: facility?.canonicalName || '',
+    facilityAddress: facility?.addressLine1 || '',
+    facilityAddress2: facility?.addressLine2 || '',
+    facilityCity: facility?.city || '',
+    facilityState: facility?.state || '',
+    facilityZip: facility?.postalCode || '',
+    facilityPhone: facility?.phone || '',
+    matchedAlias: facility?.matchedAlias || '',
+  };
+}
+
+function facilityPayloadFromApi(facility) {
+  return {
+    facilityName: facility.facilityName,
+    facilityAddress: facility.facilityAddress,
+    facilityCity: facility.facilityCity,
+    facilityState: facility.facilityState,
+    facilityZip: facility.facilityZip,
+  };
+}
+
+function isHubFacilitySyncConfigured() {
+  return Boolean(getHubFacilityBaseUrl() && process.env.STAFFSTACK_FACILITY_SYNC_TOKEN);
+}
+
+function getHubFacilityBaseUrl() {
+  return String(process.env.STAFFSTACK_HUB_URL || '').trim().replace(/\/+$/, '');
+}
+
+async function fetchHubFacilityJson(pathname, options = {}) {
+  const baseUrl = getHubFacilityBaseUrl();
+  const token = process.env.STAFFSTACK_FACILITY_SYNC_TOKEN || '';
+  if (!baseUrl || !token) throw new Error('StaffStack facility sync is not configured.');
+
+  const response = await fetch(`${baseUrl}${pathname}`, {
+    ...options,
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.headers || {}),
+    },
+    signal: AbortSignal.timeout(5000),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || `StaffStack Hub returned HTTP ${response.status}.`);
+  }
+  return data;
 }
 
 function listAdminFacilities() {
