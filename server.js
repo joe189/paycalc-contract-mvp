@@ -414,7 +414,6 @@ async function submitFacilityToHub(payload) {
       body: JSON.stringify({
         name: cleaned.facilityName,
         addressLine1: cleaned.facilityAddress,
-        addressLine2: stringOr(payload.facilityAddress2, ''),
         city: cleaned.facilityCity,
         state: cleaned.facilityState,
         postalCode: cleaned.facilityZip,
@@ -444,7 +443,6 @@ function mapHubFacility(facility) {
     id: facility?.id || '',
     facilityName: facility?.canonicalName || '',
     facilityAddress: facility?.addressLine1 || '',
-    facilityAddress2: facility?.addressLine2 || '',
     facilityCity: facility?.city || '',
     facilityState: facility?.state || '',
     facilityZip: facility?.postalCode || '',

@@ -186,14 +186,26 @@
       </div>
 
       <div class="field">
-        <label>Contractor Address Line 1</label>
-        <input id="contractorAddress1" type="text" placeholder="123 Main St">
+        <label>Contractor Street Address</label>
+        <input id="contractorStreetAddress" type="text" placeholder="123 Main St">
         <div class="hint"></div>
       </div>
 
       <div class="field">
-        <label>Contractor Address Line 2</label>
-        <input id="contractorAddress2" type="text" placeholder="Columbus, OH 43215">
+        <label>Contractor City</label>
+        <input id="contractorCity" type="text" placeholder="Columbus">
+        <div class="hint"></div>
+      </div>
+
+      <div class="field">
+        <label>Contractor State</label>
+        <input id="contractorState" type="text" maxlength="2" placeholder="OH">
+        <div class="hint"></div>
+      </div>
+
+      <div class="field">
+        <label>Contractor ZIP</label>
+        <input id="contractorZip" type="text" inputmode="numeric" placeholder="43215">
         <div class="hint"></div>
       </div>
 
@@ -914,14 +926,26 @@
       stipendApplied: currentPackage.stipendApplied || 0,
       onCallPay: currentPackage.onCallPay || 0,
       otHourly: currentPackage.otHourly || 0,
-      contractorAddress1: el("contractorAddress1").value || "",
-      contractorAddress2: el("contractorAddress2").value || "",
+      contractorAddress1: el("contractorStreetAddress").value || "",
+      contractorAddress2: formatContractorCityStateZip(
+        el("contractorCity").value,
+        el("contractorState").value,
+        el("contractorZip").value
+      ),
       facilityAddress: el("facilityAddress").value || "",
       facilityZip: el("facilityZip").value || "",
       requestedTimeOff: el("requestedTimeOff").value || "",
       extensionBonus: el("extensionBonus").value || "",
       payFrequency: el("payFrequency").value || "BIWEEKLY"
     };
+  }
+
+  function formatContractorCityStateZip(cityValue, stateValue, zipValue) {
+    const city = String(cityValue || "").trim();
+    const state = String(stateValue || "").trim().toUpperCase();
+    const zip = String(zipValue || "").trim();
+    const cityState = [city, state].filter(Boolean).join(", ");
+    return [cityState, zip].filter(Boolean).join(" ");
   }
 
   function buildContractFileName(contractorName) {
@@ -1222,7 +1246,7 @@ el("contractBlock").value = buildContractInsert({
     calc();
   });
 
-  ["contractorName","jobTitle","facilityName","facilityAddress","facilityCity","facilityZip","facilityState","shift",
+  ["contractorName","contractorStreetAddress","contractorCity","contractorState","contractorZip","jobTitle","facilityName","facilityAddress","facilityCity","facilityZip","facilityState","shift",
    "billRate","hoursPerWeek","taxableHourlyOverride","onCallBillRate","extensionBonus","marginPerHour","roundToFive","payFrequency"].forEach(id => {
     const node = el(id);
     if (!node) return;
