@@ -844,6 +844,25 @@
     );
   }
 
+  function getLaunchParams() {
+    try {
+      return new URLSearchParams(window.location.search);
+    } catch (_error) {
+      return new URLSearchParams();
+    }
+  }
+
+  function applyStaffStackPrefill() {
+    const params = getLaunchParams();
+    const contractorName = (params.get("contractorName") || "").trim();
+    const jobTitle = (params.get("jobTitle") || "").trim();
+    const staffStackCandidateId = (params.get("staffStackCandidateId") || "").trim();
+
+    if (contractorName) el("contractorName").value = contractorName;
+    if (jobTitle) el("jobTitle").value = jobTitle;
+    if (staffStackCandidateId) el("jobId").value = "staffstack:" + staffStackCandidateId;
+  }
+
   async function searchFacilities() {
     const query = (el("facilityName").value || "").trim();
     const box = el("facilitySuggestions");
@@ -1319,6 +1338,7 @@ el("contractBlock").value = buildContractInsert({
   const d = String(today.getDate()).padStart(2, "0");
   el("startDate").value = y + "-" + m + "-" + d;
   setDefaultDates();
+  applyStaffStackPrefill();
   calc();
 })();
 </script>
