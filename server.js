@@ -229,7 +229,7 @@ function saveFacilitySubmissionLocally(payload) {
     return {
       status: 'matched_locked',
       facility: locked,
-      contractPayload: { ...payload, ...facilityPayloadFromRecord(locked) },
+      contractPayload: { ...payload, ...facilityPayloadFromRecord(locked, cleaned) },
     };
   }
 
@@ -344,13 +344,13 @@ function findPendingFacility(cleaned) {
   `).get(normalizeFacilityName(cleaned.facilityName), cleaned.facilityCity, cleaned.facilityState);
 }
 
-function facilityPayloadFromRecord(record) {
+function facilityPayloadFromRecord(record, fallback = {}) {
   return {
-    facilityName: record.canonical_name,
-    facilityAddress: record.street,
-    facilityCity: record.city,
-    facilityState: record.state,
-    facilityZip: record.zip,
+    facilityName: record.canonical_name || fallback.facilityName || '',
+    facilityAddress: record.street || fallback.facilityAddress || '',
+    facilityCity: record.city || fallback.facilityCity || '',
+    facilityState: record.state || fallback.facilityState || '',
+    facilityZip: record.zip || fallback.facilityZip || '',
   };
 }
 
@@ -430,7 +430,7 @@ async function submitFacilityToHub(payload) {
       status: result?.status || 'submitted',
       facility: matchedFacility,
       contractPayload: matchedFacility
-        ? { ...payload, ...facilityPayloadFromApi(matchedFacility) }
+        ? { ...payload, ...facilityPayloadFromApi(matchedFacility, cleaned) }
         : fallbackResult.contractPayload,
     };
   } catch (error) {
@@ -453,13 +453,13 @@ function mapHubFacility(facility) {
   };
 }
 
-function facilityPayloadFromApi(facility) {
+function facilityPayloadFromApi(facility, fallback = {}) {
   return {
-    facilityName: facility.facilityName,
-    facilityAddress: facility.facilityAddress,
-    facilityCity: facility.facilityCity,
-    facilityState: facility.facilityState,
-    facilityZip: facility.facilityZip,
+    facilityName: facility.facilityName || fallback.facilityName || '',
+    facilityAddress: facility.facilityAddress || fallback.facilityAddress || '',
+    facilityCity: facility.facilityCity || fallback.facilityCity || '',
+    facilityState: facility.facilityState || fallback.facilityState || '',
+    facilityZip: facility.facilityZip || fallback.facilityZip || '',
   };
 }
 

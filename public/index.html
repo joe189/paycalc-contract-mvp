@@ -882,12 +882,14 @@
 
   function applyFacilitySuggestion(facility) {
     el("facilityName").value = facility.facilityName || "";
-    el("facilityAddress").value = facility.facilityAddress || "";
-    el("facilityCity").value = facility.facilityCity || "";
+    el("facilityAddress").value = facility.facilityAddress || el("facilityAddress").value || "";
+    el("facilityCity").value = facility.facilityCity || el("facilityCity").value || "";
     facilityState.value = facility.facilityState || facilityState.value;
-    el("facilityZip").value = facility.facilityZip || "";
+    el("facilityZip").value = facility.facilityZip || el("facilityZip").value || "";
     el("facilitySuggestions").style.display = "none";
-    el("facilityMatchHint").textContent = "Using locked facility address.";
+    el("facilityMatchHint").textContent = facility.facilityAddress
+      ? "Using approved facility address."
+      : "Approved facility matched. Enter the street address.";
     el("facilityMatchHint").className = "hint ok";
     loadDestinationsForState(facilityState.value);
     calc();
