@@ -856,10 +856,23 @@
     const params = getLaunchParams();
     const contractorName = (params.get("contractorName") || "").trim();
     const jobTitle = (params.get("jobTitle") || "").trim();
+    const contractorAddressLine1 = (params.get("contractorAddressLine1") || "").trim();
+    const contractorAddressLine2 = (params.get("contractorAddressLine2") || "").trim();
+    const contractorCity = (params.get("contractorCity") || "").trim();
+    const contractorState = (params.get("contractorState") || "").trim();
+    const contractorPostalCode = (params.get("contractorPostalCode") || "").trim();
     const staffStackCandidateId = (params.get("staffStackCandidateId") || "").trim();
 
     if (contractorName) el("contractorName").value = contractorName;
     if (jobTitle) el("jobTitle").value = jobTitle;
+    if (contractorAddressLine1) el("contractorStreetAddress").value = contractorAddressLine1;
+    if (contractorAddressLine2) {
+      const existingStreet = (el("contractorStreetAddress").value || "").trim();
+      el("contractorStreetAddress").value = [existingStreet, contractorAddressLine2].filter(Boolean).join(", ");
+    }
+    if (contractorCity) el("contractorCity").value = contractorCity;
+    if (contractorState) el("contractorState").value = contractorState.toUpperCase().slice(0, 2);
+    if (contractorPostalCode) el("contractorZip").value = contractorPostalCode;
     if (staffStackCandidateId) el("jobId").value = "staffstack:" + staffStackCandidateId;
   }
 
